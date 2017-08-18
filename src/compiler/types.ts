@@ -2897,6 +2897,9 @@ namespace ts {
         /* @internal */ getAccessibleSymbolChain(symbol: Symbol, enclosingDeclaration: Node | undefined, meaning: SymbolFlags, useOnlyExternalAliasing: boolean): Symbol[] | undefined;
 
         /* @internal */ resolveExternalModuleSymbol(symbol: Symbol): Symbol;
+        isArrayType(type: Type): boolean;
+        isArrayLikeType(type: Type): boolean;
+        isTypeAny(type: Type): boolean;
     }
 
     /* @internal */

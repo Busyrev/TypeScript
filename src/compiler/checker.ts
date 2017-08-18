@@ -274,6 +274,9 @@ namespace ts {
             getJsxNamespace: () => unescapeLeadingUnderscores(getJsxNamespace()),
             getAccessibleSymbolChain,
             resolveExternalModuleSymbol,
+            isArrayType,
+            isArrayLikeType,
+            isTypeAny,
         };
 
         const tupleTypes: GenericType[] = [];
