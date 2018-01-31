@@ -1252,8 +1252,18 @@ namespace Harness {
             options: ts.CompilerOptions,
             // Current directory is needed for rwcRunner to be able to use currentDirectory defined in json file
             currentDirectory: string): DeclarationCompilationContext | undefined {
-            if (options.declaration && result.errors.length === 0 && result.declFilesCode.length !== result.files.length) {
-                throw new Error("There were no errors and declFiles generated did not match number of js files generated");
+
+            if (result.errors.length === 0) {
+                if (options.declaration) {
+                    if (options.emitDeclarationsOnly) {
+                        if (result.files.length > 0 || result.declFilesCode.length === 0) {
+                            throw new Error("Only declaration files should be generated when emitDeclarationsOnly:true");
+                        }
+                    }
+                    else if (result.declFilesCode.length !== result.files.length) {
+                        throw new Error("There were no errors and declFiles generated did not match number of js files generated");
+                    }
+                }
             }
 
             const declInputFiles: TestFile[] = [];
@@ -1654,7 +1664,7 @@ namespace Harness {
         }
 
         export function doJsEmitBaseline(baselinePath: string, header: string, options: ts.CompilerOptions, result: CompilerResult, tsConfigFiles: Harness.Compiler.TestFile[], toBeCompiled: Harness.Compiler.TestFile[], otherFiles: Harness.Compiler.TestFile[], harnessSettings: Harness.TestCaseParser.CompilerSettings) {
-            if (!options.noEmit && result.files.length === 0 && result.errors.length === 0) {
+            if (!options.noEmit && !options.emitDeclarationsOnly && result.files.length === 0 && result.errors.length === 0) {
                 throw new Error("Expected at least one js file to be emitted or at least one error to be created.");
             }
 
@@ -1961,7 +1971,7 @@ namespace Harness {
             let tsConfigFileUnitData: TestUnitData;
             for (let i = 0; i < testUnitData.length; i++) {
                 const data = testUnitData[i];
-                if (ts.getBaseFileName(data.name).toLowerCase() === "tsconfig.json") {
+                if (getConfigNameFromFileName(data.name)) {
                     const configJson = ts.parseJsonText(data.name, data.content);
                     assert.isTrue(configJson.endOfFileToken !== undefined);
                     let baseDir = ts.normalizePath(ts.getDirectoryPath(data.name));
@@ -2170,6 +2180,11 @@ namespace Harness {
     export function getDefaultLibraryFile(filePath: string, io: Harness.Io): Harness.Compiler.TestFile {
         const libFile = Harness.userSpecifiedRoot + Harness.libFolder + ts.getBaseFileName(ts.normalizeSlashes(filePath));
         return { unitName: libFile, content: io.readFile(libFile) };
+    }
+
+    export function getConfigNameFromFileName(filename: string): "tsconfig.json" | "jsconfig.json" | undefined {
+        const flc = ts.getBaseFileName(filename).toLowerCase();
+        return ts.find(["tsconfig.json" as "tsconfig.json", "jsconfig.json" as "jsconfig.json"], x => x === flc);
     }
 
     if (Error) (<any>Error).stackTraceLimit = 100;

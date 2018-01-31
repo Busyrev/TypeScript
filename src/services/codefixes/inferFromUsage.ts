@@ -191,7 +191,7 @@ namespace ts.codefix {
 
     function makeChange(declaration: Declaration, start: number, type: Type | undefined, program: Program): TextChange | undefined {
         const typeString = type && typeToString(type, declaration, program.getTypeChecker());
-        return typeString === undefined ? undefined : { span: createTextSpan(start, 0), newText: `: ${typeString}` };
+        return typeString === undefined ? undefined : createTextChangeFromStartLength(start, 0, `: ${typeString}`);
     }
 
     function getReferences(token: PropertyName | Token<SyntaxKind.ConstructorKeyword>, sourceFile: SourceFile, program: Program, cancellationToken: CancellationToken): Identifier[] {
@@ -229,13 +229,13 @@ namespace ts.codefix {
         }
     }
 
-    function getTypeAccessiblityWriter(checker: TypeChecker): StringSymbolWriter {
+    function getTypeAccessiblityWriter(checker: TypeChecker): EmitTextWriter {
         let str = "";
         let typeIsAccessible = true;
 
         const writeText: (text: string) => void = text => str += text;
         return {
-            string: () => typeIsAccessible ? str : undefined,
+            getText: () => typeIsAccessible ? str : undefined,
             writeKeyword: writeText,
             writeOperator: writeText,
             writePunctuation: writeText,
@@ -244,6 +244,15 @@ namespace ts.codefix {
             writeParameter: writeText,
             writeProperty: writeText,
             writeSymbol: writeText,
+            write: writeText,
+            writeTextOfNode: writeText,
+            rawWrite: writeText,
+            writeLiteral: writeText,
+            getTextPos: () => 0,
+            getLine: () => 0,
+            getColumn: () => 0,
+            getIndent: () => 0,
+            isAtStartOfLine: () => false,
             writeLine: () => writeText(" "),
             increaseIndent: noop,
             decreaseIndent: noop,
@@ -261,8 +270,8 @@ namespace ts.codefix {
 
     function typeToString(type: Type, enclosingDeclaration: Declaration, checker: TypeChecker): string {
         const writer = getTypeAccessiblityWriter(checker);
-        checker.getSymbolDisplayBuilder().buildTypeDisplay(type, writer, enclosingDeclaration);
-        return writer.string();
+        checker.writeType(type, enclosingDeclaration, /*flags*/ undefined, writer);
+        return writer.getText();
     }
 
     namespace InferFromReference {

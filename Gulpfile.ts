@@ -528,7 +528,7 @@ gulp.task(tsserverLibraryFile, /*help*/ false, [servicesFile, typesMapJson], (do
     const serverLibraryProject = tsc.createProject("src/server/tsconfig.library.json", getCompilerSettings({ removeComments: false }, /*useBuiltCompiler*/ true));
     const {js, dts}: { js: NodeJS.ReadableStream, dts: NodeJS.ReadableStream } = serverLibraryProject.src()
         .pipe(sourcemaps.init())
-        .pipe(newer(tsserverLibraryFile))
+        .pipe(newer(<any>{ dest: tsserverLibraryFile, extra: ["src/compiler/**/*.ts", "src/services/**/*.ts"] }))
         .pipe(serverLibraryProject());
 
     return merge2([
@@ -1115,7 +1115,7 @@ gulp.task("lint", "Runs tslint on the compiler sources. Optional arguments are: 
     const fileMatcher = cmdLineOptions.files;
     const files = fileMatcher
         ? `src/**/${fileMatcher}`
-        : "Gulpfile.ts 'scripts/generateLocalizedDiagnosticMessages.ts' 'scripts/tslint/**/*.ts' 'src/**/*.ts' --exclude 'src/lib/*.d.ts'";
+        : `Gulpfile.ts "scripts/generateLocalizedDiagnosticMessages.ts" "scripts/tslint/**/*.ts" "src/**/*.ts" --exclude "src/lib/*.d.ts"`;
     const cmd = `node node_modules/tslint/bin/tslint ${files} --formatters-dir ./built/local/tslint/formatters --format autolinkableStylish`;
     console.log("Linting: " + cmd);
     child_process.execSync(cmd, { stdio: [0, 1, 2] });
