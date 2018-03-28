@@ -4,9 +4,9 @@
 namespace ts {
     // WARNING: The script `configureNightly.ts` uses a regexp to parse out these values.
     // If changing the text in this section, be sure to test `configureNightly` too.
-    export const versionMajorMinor = "2.8";
+    export const versionMajorMinor = "2.9";
     /** The version of the TypeScript compiler release */
-    export const version = `${versionMajorMinor}.0`;
+    export const version = `${versionMajorMinor}.0-dev`;
 }
 
 namespace ts {
@@ -25,6 +25,10 @@ namespace ts {
 /* @internal */
 namespace ts {
     export const emptyArray: never[] = [] as never[];
+    export function closeFileWatcher(watcher: FileWatcher) {
+        watcher.close();
+    }
+
     /** Create a MapLike with good performance. */
     function createDictionaryObject<T>(): MapLike<T> {
         const map = Object.create(/*prototype*/ null); // tslint:disable-line:no-null-keyword
@@ -439,23 +443,21 @@ namespace ts {
     export function sameMap<T>(array: T[], f: (x: T, i: number) => T): T[];
     export function sameMap<T>(array: ReadonlyArray<T>, f: (x: T, i: number) => T): ReadonlyArray<T>;
     export function sameMap<T>(array: T[], f: (x: T, i: number) => T): T[] {
-        let result: T[];
         if (array) {
             for (let i = 0; i < array.length; i++) {
-                if (result) {
-                    result.push(f(array[i], i));
-                }
-                else {
-                    const item = array[i];
-                    const mapped = f(item, i);
-                    if (item !== mapped) {
-                        result = array.slice(0, i);
-                        result.push(mapped);
+                const item = array[i];
+                const mapped = f(item, i);
+                if (item !== mapped) {
+                    const result = array.slice(0, i);
+                    result.push(mapped);
+                    for (i++; i < array.length; i++) {
+                        result.push(f(array[i], i));
                     }
+                    return result;
                 }
             }
         }
-        return result || array;
+        return array;
     }
 
     /**
@@ -622,23 +624,6 @@ namespace ts {
     }
 
     /**
-     * Computes the first matching span of elements and returns a tuple of the first span
-     * and the remaining elements.
-     */
-    export function span<T>(array: ReadonlyArray<T>, f: (x: T, i: number) => boolean): [T[], T[]] {
-        if (array) {
-            for (let i = 0; i < array.length; i++) {
-                if (!f(array[i], i)) {
-                    return [array.slice(0, i), array.slice(i)];
-                }
-            }
-            return [array.slice(0), []];
-        }
-
-        return undefined;
-    }
-
-    /**
      * Maps contiguous spans of values with the same key.
      *
      * @param array The array to map.
@@ -796,6 +781,18 @@ namespace ts {
         return deduplicated;
     }
 
+    export function insertSorted<T>(array: SortedArray<T>, insert: T, compare: Comparer<T>): void {
+        if (array.length === 0) {
+            array.push(insert);
+            return;
+        }
+
+        const insertIndex = binarySearch(array, insert, identity, compare);
+        if (insertIndex < 0) {
+            array.splice(~insertIndex, 0, insert);
+        }
+    }
+
     export function sortAndDeduplicate<T>(array: ReadonlyArray<T>, comparer: Comparer<T>, equalityComparer?: EqualityComparer<T>) {
         return deduplicateSorted(sort(array, comparer), equalityComparer || comparer);
     }
@@ -906,8 +903,7 @@ namespace ts {
     export function sum<T extends Record<K, number>, K extends string>(array: ReadonlyArray<T>, prop: K): number {
         let result = 0;
         for (const v of array) {
-            // TODO: Remove the following type assertion once the fix for #17069 is merged
-            result += v[prop] as number;
+            result += v[prop];
         }
         return result;
     }
@@ -1063,7 +1059,7 @@ namespace ts {
      * Returns the first element of an array if non-empty, `undefined` otherwise.
      */
     export function firstOrUndefined<T>(array: ReadonlyArray<T>): T | undefined {
-        return elementAt(array, 0);
+        return array.length === 0 ? undefined : array[0];
     }
 
     export function first<T>(array: ReadonlyArray<T>): T {
@@ -1075,7 +1071,7 @@ namespace ts {
      * Returns the last element of an array if non-empty, `undefined` otherwise.
      */
     export function lastOrUndefined<T>(array: ReadonlyArray<T>): T | undefined {
-        return elementAt(array, -1);
+        return array.length === 0 ? undefined : array[array.length - 1];
     }
 
     export function last<T>(array: ReadonlyArray<T>): T {
@@ -1323,20 +1319,20 @@ namespace ts {
      */
     export function arrayToMap<T>(array: ReadonlyArray<T>, makeKey: (value: T) => string): Map<T>;
     export function arrayToMap<T, U>(array: ReadonlyArray<T>, makeKey: (value: T) => string, makeValue: (value: T) => U): Map<U>;
-    export function arrayToMap<T, U>(array: ReadonlyArray<T>, makeKey: (value: T) => string, makeValue?: (value: T) => U): Map<T | U> {
+    export function arrayToMap<T, U>(array: ReadonlyArray<T>, makeKey: (value: T) => string, makeValue: (value: T) => T | U = identity): Map<T | U> {
         const result = createMap<T | U>();
         for (const value of array) {
-            result.set(makeKey(value), makeValue ? makeValue(value) : value);
+            result.set(makeKey(value), makeValue(value));
         }
         return result;
     }
 
     export function arrayToNumericMap<T>(array: ReadonlyArray<T>, makeKey: (value: T) => number): T[];
-    export function arrayToNumericMap<T, V>(array: ReadonlyArray<T>, makeKey: (value: T) => number, makeValue: (value: T) => V): V[];
-    export function arrayToNumericMap<T, V>(array: ReadonlyArray<T>, makeKey: (value: T) => number, makeValue?: (value: T) => V): V[] {
-        const result: V[] = [];
+    export function arrayToNumericMap<T, U>(array: ReadonlyArray<T>, makeKey: (value: T) => number, makeValue: (value: T) => U): U[];
+    export function arrayToNumericMap<T, U>(array: ReadonlyArray<T>, makeKey: (value: T) => number, makeValue: (value: T) => T | U = identity): (T | U)[] {
+        const result: (T | U)[] = [];
         for (const value of array) {
-            result[makeKey(value)] = makeValue ? makeValue(value) : value as any as V;
+            result[makeKey(value)] = makeValue(value);
         }
         return result;
     }
@@ -1350,6 +1346,20 @@ namespace ts {
     export function arrayToSet<T>(array: ReadonlyArray<T>, makeKey: (value: T) => string): Map<true>;
     export function arrayToSet(array: ReadonlyArray<any>, makeKey?: (value: any) => string): Map<true> {
         return arrayToMap<any, true>(array, makeKey || (s => s), () => true);
+    }
+
+    export function arrayToMultiMap<T>(values: ReadonlyArray<T>, makeKey: (value: T) => string): MultiMap<T>;
+    export function arrayToMultiMap<T, U>(values: ReadonlyArray<T>, makeKey: (value: T) => string, makeValue: (value: T) => U): MultiMap<U>;
+    export function arrayToMultiMap<T, U>(values: ReadonlyArray<T>, makeKey: (value: T) => string, makeValue: (value: T) => T | U = identity): MultiMap<T | U> {
+        const result = createMultiMap<T | U>();
+        for (const value of values) {
+            result.add(makeKey(value), makeValue(value));
+        }
+        return result;
+    }
+
+    export function group<T>(values: ReadonlyArray<T>, getGroupId: (value: T) => string): ReadonlyArray<ReadonlyArray<T>> {
+        return arrayFrom(arrayToMultiMap(values, getGroupId).values());
     }
 
     export function cloneMap(map: SymbolTable): SymbolTable;
@@ -1454,7 +1464,13 @@ namespace ts {
 
     export function cast<TOut extends TIn, TIn = any>(value: TIn | undefined, test: (value: TIn) => value is TOut): TOut {
         if (value !== undefined && test(value)) return value;
-        Debug.fail(`Invalid cast. The supplied value did not pass the test '${Debug.getFunctionName(test)}'.`);
+
+        if (value && typeof (value as any).kind === "number") {
+            Debug.fail(`Invalid cast. The supplied ${Debug.showSyntaxKind(value as any as Node)} did not pass the test '${Debug.getFunctionName(test)}'.`);
+        }
+        else {
+            Debug.fail(`Invalid cast. The supplied value did not pass the test '${Debug.getFunctionName(test)}'.`);
+        }
     }
 
     /** Does nothing. */
@@ -1560,7 +1576,7 @@ namespace ts {
         return text.replace(/{(\d+)}/g, (_match, index?) => args[+index + baseIndex]);
     }
 
-    export let localizedDiagnosticMessages: MapLike<string> = undefined;
+    export let localizedDiagnosticMessages: MapLike<string>;
 
     export function getLocaleSpecificMessage(message: DiagnosticMessage) {
         return localizedDiagnosticMessages && localizedDiagnosticMessages[message.key] || message.message;
@@ -1881,6 +1897,11 @@ namespace ts {
             Comparison.EqualTo;
     }
 
+    /** True is greater than false. */
+    export function compareBooleans(a: boolean, b: boolean): Comparison {
+        return compareValues(a ? 1 : 0, b ? 1 : 0);
+    }
+
     function compareMessageText(text1: string | DiagnosticMessageChain, text2: string | DiagnosticMessageChain): Comparison {
         while (text1 && text2) {
             // We still have both chains.
@@ -2025,6 +2046,10 @@ namespace ts {
             moduleResolution = getEmitModuleKind(compilerOptions) === ModuleKind.CommonJS ? ModuleResolutionKind.NodeJs : ModuleResolutionKind.Classic;
         }
         return moduleResolution;
+    }
+
+    export function getAreDeclarationMapsEnabled(options: CompilerOptions) {
+        return !!(options.declaration && options.declarationMap);
     }
 
     export function getAllowSyntheticDefaultImports(compilerOptions: CompilerOptions) {
@@ -2504,7 +2529,6 @@ namespace ts {
         path = normalizePath(path);
         currentDirectory = normalizePath(currentDirectory);
 
-        const comparer = useCaseSensitiveFileNames ? compareStringsCaseSensitive : compareStringsCaseInsensitive;
         const patterns = getFileMatcherPatterns(path, excludes, includes, useCaseSensitiveFileNames, currentDirectory);
 
         const regexFlag = useCaseSensitiveFileNames ? "" : "i";
@@ -2525,7 +2549,7 @@ namespace ts {
         function visitDirectory(path: string, absolutePath: string, depth: number | undefined) {
             const { files, directories } = getFileSystemEntries(path);
 
-            for (const current of sort(files, comparer)) {
+            for (const current of sort(files, compareStringsCaseSensitive)) {
                 const name = combinePaths(path, current);
                 const absoluteName = combinePaths(absolutePath, current);
                 if (extensions && !fileExtensionIsOneOf(name, extensions)) continue;
@@ -2548,7 +2572,7 @@ namespace ts {
                 }
             }
 
-            for (const current of sort(directories, comparer)) {
+            for (const current of sort(directories, compareStringsCaseSensitive)) {
                 const name = combinePaths(path, current);
                 const absoluteName = combinePaths(absolutePath, current);
                 if ((!includeDirectoryRegex || includeDirectoryRegex.test(absoluteName)) &&
@@ -2583,7 +2607,7 @@ namespace ts {
             // Iterate over each include base path and include unique base paths that are not a
             // subpath of an existing base path
             for (const includeBasePath of includeBasePaths) {
-                if (ts.every(basePaths, basePath => !containsPath(basePath, includeBasePath, path, !useCaseSensitiveFileNames))) {
+                if (every(basePaths, basePath => !containsPath(basePath, includeBasePath, path, !useCaseSensitiveFileNames))) {
                     basePaths.push(includeBasePath);
                 }
             }
@@ -2772,6 +2796,10 @@ namespace ts {
         this.flags = flags;
         this.escapedName = name;
         this.declarations = undefined;
+        this.valueDeclaration = undefined;
+        this.id = undefined;
+        this.mergeId = undefined;
+        this.parent = undefined;
     }
 
     function Type(this: Type, checker: TypeChecker, flags: TypeFlags) {
@@ -2876,6 +2904,18 @@ namespace ts {
             throw e;
         }
 
+        export function assertDefined<T>(value: T | null | undefined, message?: string): T {
+            assert(value !== undefined && value !== null, message);
+            return value;
+        }
+
+        export function assertEachDefined<T, A extends ReadonlyArray<T>>(value: A, message: string): A {
+            for (const v of value) {
+                assertDefined(v, message);
+            }
+            return value;
+        }
+
         export function assertNever(member: never, message?: string, stackCrawlMark?: AnyFunction): never {
             return fail(message || `Illegal value: ${member}`, stackCrawlMark || assertNever);
         }
@@ -2892,6 +2932,27 @@ namespace ts {
                 const match = /^function\s+([\w\$]+)\s*\(/.exec(text);
                 return match ? match[1] : "";
             }
+        }
+
+        export function showSymbol(symbol: Symbol): string {
+            const symbolFlags = (ts as any).SymbolFlags;
+            return `{ flags: ${symbolFlags ? showFlags(symbol.flags, symbolFlags) : symbol.flags}; declarations: ${map(symbol.declarations, showSyntaxKind)} }`;
+        }
+
+        function showFlags(flags: number, flagsEnum: { [flag: number]: string }): string {
+            const out = [];
+            for (let pow = 0; pow <= 30; pow++) {
+                const n = 1 << pow;
+                if (flags & n) {
+                    out.push(flagsEnum[n]);
+                }
+            }
+            return out.join("|");
+        }
+
+        export function showSyntaxKind(node: Node): string {
+            const syntaxKind = (ts as any).SyntaxKind;
+            return syntaxKind ? syntaxKind[node.kind] : node.kind.toString();
         }
     }
 
@@ -2972,12 +3033,12 @@ namespace ts {
      */
     export function matchedText(pattern: Pattern, candidate: string): string {
         Debug.assert(isPatternMatch(pattern, candidate));
-        return candidate.substr(pattern.prefix.length, candidate.length - pattern.suffix.length);
+        return candidate.substring(pattern.prefix.length, candidate.length - pattern.suffix.length);
     }
 
     /** Return the object corresponding to the best pattern to match `candidate`. */
     export function findBestPatternMatch<T>(values: ReadonlyArray<T>, getPattern: (value: T) => Pattern, candidate: string): T | undefined {
-        let matchedValue: T | undefined = undefined;
+        let matchedValue: T | undefined;
         // use length of prefix as betterness criteria
         let longestMatchPrefixLength = -1;
 
@@ -3070,5 +3131,37 @@ namespace ts {
 
     export function singleElementArray<T>(t: T | undefined): T[] | undefined {
         return t === undefined ? undefined : [t];
+    }
+
+    export function enumerateInsertsAndDeletes<T, U>(newItems: ReadonlyArray<T>, oldItems: ReadonlyArray<U>, comparer: (a: T, b: U) => Comparison, inserted: (newItem: T) => void, deleted: (oldItem: U) => void, unchanged?: (oldItem: U, newItem: T) => void) {
+        unchanged = unchanged || noop;
+        let newIndex = 0;
+        let oldIndex = 0;
+        const newLen = newItems.length;
+        const oldLen = oldItems.length;
+        while (newIndex < newLen && oldIndex < oldLen) {
+            const newItem = newItems[newIndex];
+            const oldItem = oldItems[oldIndex];
+            const compareResult = comparer(newItem, oldItem);
+            if (compareResult === Comparison.LessThan) {
+                inserted(newItem);
+                newIndex++;
+            }
+            else if (compareResult === Comparison.GreaterThan) {
+                deleted(oldItem);
+                oldIndex++;
+            }
+            else {
+                unchanged(oldItem, newItem);
+                newIndex++;
+                oldIndex++;
+            }
+        }
+        while (newIndex < newLen) {
+            inserted(newItems[newIndex++]);
+        }
+        while (oldIndex < oldLen) {
+            deleted(oldItems[oldIndex++]);
+        }
     }
 }

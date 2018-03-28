@@ -976,7 +976,7 @@ declare type NumericallyIndexed<T> = {
 declare const enum E {
     A = 0,
     B = 1,
-    C = 2,
+    C = 2
 }
 declare type K00 = keyof any;
 declare type K01 = keyof string;
@@ -1122,10 +1122,10 @@ declare type Handlers<T> = {
 };
 declare function on<T>(handlerHash: Handlers<T>): T;
 declare var hashOfEmpty1: {
-    test: any;
+    test: {};
 };
 declare var hashOfEmpty2: {
-    test: any;
+    test: boolean;
 };
 interface Options1<Data, Computed> {
     data?: Data;

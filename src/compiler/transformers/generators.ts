@@ -430,8 +430,7 @@ namespace ts {
                     return visitFunctionExpression(<FunctionExpression>node);
 
                 default:
-                    Debug.failBadSyntaxKind(node);
-                    return visitEachChild(node, visitor, context);
+                    return Debug.failBadSyntaxKind(node);
             }
         }
 
@@ -1771,16 +1770,15 @@ namespace ts {
                     for (let i = clausesWritten; i < numClauses; i++) {
                         const clause = caseBlock.clauses[i];
                         if (clause.kind === SyntaxKind.CaseClause) {
-                            const caseClause = <CaseClause>clause;
-                            if (containsYield(caseClause.expression) && pendingClauses.length > 0) {
+                            if (containsYield(clause.expression) && pendingClauses.length > 0) {
                                 break;
                             }
 
                             pendingClauses.push(
                                 createCaseClause(
-                                    visitNode(caseClause.expression, visitor, isExpression),
+                                    visitNode(clause.expression, visitor, isExpression),
                                     [
-                                        createInlineBreak(clauseLabels[i], /*location*/ caseClause.expression)
+                                        createInlineBreak(clauseLabels[i], /*location*/ clause.expression)
                                     ]
                                 )
                             );

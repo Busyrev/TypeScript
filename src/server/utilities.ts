@@ -83,7 +83,7 @@ namespace ts.server {
         };
     }
 
-    export function mergeMapLikes(target: MapLike<any>, source: MapLike<any>): void {
+    export function mergeMapLikes<T extends object>(target: T, source: Partial<T>): void {
         for (const key in source) {
             if (hasProperty(source, key)) {
                 target[key] = source[key];
@@ -232,18 +232,6 @@ namespace ts.server {
         return base === "tsconfig.json" || base === "jsconfig.json" ? base : undefined;
     }
 
-    export function insertSorted<T>(array: SortedArray<T>, insert: T, compare: Comparer<T>): void {
-        if (array.length === 0) {
-            array.push(insert);
-            return;
-        }
-
-        const insertIndex = binarySearch(array, insert, identity, compare);
-        if (insertIndex < 0) {
-            array.splice(~insertIndex, 0, insert);
-        }
-    }
-
     export function removeSorted<T>(array: SortedArray<T>, remove: T, compare: Comparer<T>): void {
         if (!array || array.length === 0) {
             return;
@@ -274,36 +262,6 @@ namespace ts.server {
     }
     function isNonDuplicateInSortedArray<T>(value: T, index: number, array: T[]) {
         return index === 0 || value !== array[index - 1];
-    }
-
-    export function enumerateInsertsAndDeletes<T>(newItems: SortedReadonlyArray<T>, oldItems: SortedReadonlyArray<T>, inserted: (newItem: T) => void, deleted: (oldItem: T) => void, comparer: Comparer<T>) {
-        let newIndex = 0;
-        let oldIndex = 0;
-        const newLen = newItems.length;
-        const oldLen = oldItems.length;
-        while (newIndex < newLen && oldIndex < oldLen) {
-            const newItem = newItems[newIndex];
-            const oldItem = oldItems[oldIndex];
-            const compareResult = comparer(newItem, oldItem);
-            if (compareResult === Comparison.LessThan) {
-                inserted(newItem);
-                newIndex++;
-            }
-            else if (compareResult === Comparison.GreaterThan) {
-                deleted(oldItem);
-                oldIndex++;
-            }
-            else {
-                newIndex++;
-                oldIndex++;
-            }
-        }
-        while (newIndex < newLen) {
-            inserted(newItems[newIndex++]);
-        }
-        while (oldIndex < oldLen) {
-            deleted(oldItems[oldIndex++]);
-        }
     }
 
     /* @internal */

@@ -75,10 +75,13 @@ namespace ts {
         getLineStarts(): ReadonlyArray<number>;
         getPositionOfLineAndCharacter(line: number, character: number): number;
         update(newText: string, textChangeRange: TextChangeRange): SourceFile;
+
+        /* @internal */ sourceMapper?: sourcemaps.SourceMapper;
     }
 
     export interface SourceFileLike {
         getLineAndCharacterOfPosition(pos: number): LineAndCharacter;
+        /*@internal*/ sourceMapper?: sourcemaps.SourceMapper;
     }
 
     export interface SourceMapSource {
@@ -200,8 +203,8 @@ namespace ts {
         /* @internal */ hasChangedAutomaticTypeDirectiveNames?: boolean;
 
         /*
-         * getDirectories is also required for full import and type reference completions. Without it defined, certain
-         * completions will not be provided
+         * Required for full import and type reference completions.
+         * These should be unprefixed names. E.g. `getDirectories("/foo/bar")` should return `["a", "b"]`, not `["/foo/bar/a", "/foo/bar/b"]`.
          */
         getDirectories?(directoryName: string): string[];
 
@@ -214,6 +217,15 @@ namespace ts {
         installPackage?(options: InstallPackageOptions): Promise<ApplyCodeActionCommandResult>;
     }
 
+    export interface UserPreferences {
+        readonly quotePreference?: "double" | "single";
+        readonly includeCompletionsForModuleExports?: boolean;
+        readonly includeCompletionsWithInsertText?: boolean;
+        readonly importModuleSpecifierPreference?: "relative" | "non-relative";
+    }
+    /* @internal */
+    export const defaultPreferences: UserPreferences = {};
+
     //
     // Public services of a language service instance associated
     // with a language service host instance
@@ -223,6 +235,7 @@ namespace ts {
 
         getSyntacticDiagnostics(fileName: string): Diagnostic[];
         getSemanticDiagnostics(fileName: string): Diagnostic[];
+        getSuggestionDiagnostics(fileName: string): Diagnostic[];
 
         // TODO: Rename this to getProgramDiagnostics to better indicate that these are any
         // diagnostics present for the program level, and not just 'options' diagnostics.
@@ -248,8 +261,9 @@ namespace ts {
             fileName: string,
             position: number,
             name: string,
-            options: FormatCodeOptions | FormatCodeSettings | undefined,
+            formatOptions: FormatCodeOptions | FormatCodeSettings | undefined,
             source: string | undefined,
+            preferences: UserPreferences | undefined,
         ): CompletionEntryDetails;
         getCompletionEntrySymbol(fileName: string, position: number, name: string, source: string | undefined): Symbol;
 
@@ -295,8 +309,8 @@ namespace ts {
 
         getSpanOfEnclosingComment(fileName: string, position: number, onlyMultiLine: boolean): TextSpan;
 
-        getCodeFixesAtPosition(fileName: string, start: number, end: number, errorCodes: ReadonlyArray<number>, formatOptions: FormatCodeSettings): ReadonlyArray<CodeFixAction>;
-        getCombinedCodeFix(scope: CombinedCodeFixScope, fixId: {}, formatOptions: FormatCodeSettings): CombinedCodeActions;
+        getCodeFixesAtPosition(fileName: string, start: number, end: number, errorCodes: ReadonlyArray<number>, formatOptions: FormatCodeSettings, preferences: UserPreferences): ReadonlyArray<CodeFixAction>;
+        getCombinedCodeFix(scope: CombinedCodeFixScope, fixId: {}, formatOptions: FormatCodeSettings, preferences: UserPreferences): CombinedCodeActions;
         applyCodeActionCommand(action: CodeActionCommand): Promise<ApplyCodeActionCommandResult>;
         applyCodeActionCommand(action: CodeActionCommand[]): Promise<ApplyCodeActionCommandResult[]>;
         applyCodeActionCommand(action: CodeActionCommand | CodeActionCommand[]): Promise<ApplyCodeActionCommandResult | ApplyCodeActionCommandResult[]>;
@@ -306,8 +320,9 @@ namespace ts {
         applyCodeActionCommand(fileName: string, action: CodeActionCommand[]): Promise<ApplyCodeActionCommandResult[]>;
         /** @deprecated `fileName` will be ignored */
         applyCodeActionCommand(fileName: string, action: CodeActionCommand | CodeActionCommand[]): Promise<ApplyCodeActionCommandResult | ApplyCodeActionCommandResult[]>;
-        getApplicableRefactors(fileName: string, positionOrRaneg: number | TextRange): ApplicableRefactorInfo[];
-        getEditsForRefactor(fileName: string, formatOptions: FormatCodeSettings, positionOrRange: number | TextRange, refactorName: string, actionName: string): RefactorEditInfo | undefined;
+        getApplicableRefactors(fileName: string, positionOrRaneg: number | TextRange, preferences: UserPreferences | undefined): ApplicableRefactorInfo[];
+        getEditsForRefactor(fileName: string, formatOptions: FormatCodeSettings, positionOrRange: number | TextRange, refactorName: string, actionName: string, preferences: UserPreferences | undefined): RefactorEditInfo | undefined;
+        organizeImports(scope: OrganizeImportsScope, formatOptions: FormatCodeSettings, preferences: UserPreferences | undefined): ReadonlyArray<FileTextChanges>;
 
         getEmitOutput(fileName: string, emitOnlyDtsFiles?: boolean): EmitOutput;
 
@@ -326,9 +341,14 @@ namespace ts {
 
     export interface CombinedCodeFixScope { type: "file"; fileName: string; }
 
-    export interface GetCompletionsAtPositionOptions {
-        includeExternalModuleExports: boolean;
-        includeInsertTextCompletions: boolean;
+    export type OrganizeImportsScope = CombinedCodeFixScope;
+
+    /** @deprecated Use UserPreferences */
+    export interface GetCompletionsAtPositionOptions extends UserPreferences {
+        /** @deprecated Use includeCompletionsForModuleExports */
+        includeExternalModuleExports?: boolean;
+        /** @deprecated Use includeCompletionsWithInsertText */
+        includeInsertTextCompletions?: boolean;
     }
 
     export interface ApplyCodeActionCommandResult {
@@ -420,6 +440,7 @@ namespace ts {
          * This may be omitted to indicate that the code fix can't be applied in a group.
          */
         fixId?: {};
+        fixAllDescription?: string;
     }
 
     export interface CombinedCodeActions {
@@ -724,6 +745,7 @@ namespace ts {
     }
 
     export interface CompletionInfo {
+        /** Not true for all glboal completions. This will be true if the enclosing scope matches a few syntax kinds. See `isSnippetScope`. */
         isGlobalCompletion: boolean;
         isMemberCompletion: boolean;
 

@@ -2,24 +2,25 @@
 namespace ts.SymbolDisplay {
     // TODO(drosen): use contextual SemanticMeaning.
     export function getSymbolKind(typeChecker: TypeChecker, symbol: Symbol, location: Node): ScriptElementKind {
-        const flags = getCombinedLocalAndExportSymbolFlags(symbol);
+        const result = getSymbolKindOfConstructorPropertyMethodAccessorFunctionOrVar(typeChecker, symbol, location);
+        if (result !== ScriptElementKind.unknown) {
+            return result;
+        }
 
+        const flags = getCombinedLocalAndExportSymbolFlags(symbol);
         if (flags & SymbolFlags.Class) {
             return getDeclarationOfKind(symbol, SyntaxKind.ClassExpression) ?
-            ScriptElementKind.localClassElement : ScriptElementKind.classElement;
+                ScriptElementKind.localClassElement : ScriptElementKind.classElement;
         }
         if (flags & SymbolFlags.Enum) return ScriptElementKind.enumElement;
         if (flags & SymbolFlags.TypeAlias) return ScriptElementKind.typeElement;
         if (flags & SymbolFlags.Interface) return ScriptElementKind.interfaceElement;
         if (flags & SymbolFlags.TypeParameter) return ScriptElementKind.typeParameterElement;
 
-        const result = getSymbolKindOfConstructorPropertyMethodAccessorFunctionOrVar(typeChecker, symbol, location);
-        if (result === ScriptElementKind.unknown) {
-            if (flags & SymbolFlags.TypeParameter) return ScriptElementKind.typeParameterElement;
-            if (flags & SymbolFlags.EnumMember) return ScriptElementKind.enumMemberElement;
-            if (flags & SymbolFlags.Alias) return ScriptElementKind.alias;
-            if (flags & SymbolFlags.Module) return ScriptElementKind.moduleElement;
-        }
+        if (flags & SymbolFlags.TypeParameter) return ScriptElementKind.typeParameterElement;
+        if (flags & SymbolFlags.EnumMember) return ScriptElementKind.enumMemberElement;
+        if (flags & SymbolFlags.Alias) return ScriptElementKind.alias;
+        if (flags & SymbolFlags.Module) return ScriptElementKind.moduleElement;
 
         return result;
     }
@@ -79,6 +80,8 @@ namespace ts.SymbolDisplay {
             switch (location.parent && location.parent.kind) {
                 // If we've typed a character of the attribute name, will be 'JsxAttribute', else will be 'JsxOpeningElement'.
                 case SyntaxKind.JsxOpeningElement:
+                case SyntaxKind.JsxElement:
+                case SyntaxKind.JsxSelfClosingElement:
                     return location.kind === SyntaxKind.Identifier ? ScriptElementKind.memberVariableElement : ScriptElementKind.jsxAttribute;
                 case SyntaxKind.JsxAttribute:
                     return ScriptElementKind.jsxAttribute;
@@ -115,7 +118,7 @@ namespace ts.SymbolDisplay {
         const displayParts: SymbolDisplayPart[] = [];
         let documentation: SymbolDisplayPart[];
         let tags: JSDocTagInfo[];
-        const symbolFlags = ts.getCombinedLocalAndExportSymbolFlags(symbol);
+        const symbolFlags = getCombinedLocalAndExportSymbolFlags(symbol);
         let symbolKind = getSymbolKindOfConstructorPropertyMethodAccessorFunctionOrVar(typeChecker, symbol, location);
         let hasAddedSymbolInfo: boolean;
         const isThisExpression = location.kind === SyntaxKind.ThisKeyword && isExpression(location);
@@ -144,13 +147,13 @@ namespace ts.SymbolDisplay {
             // try get the call/construct signature from the type if it matches
             let callExpressionLike: CallExpression | NewExpression | JsxOpeningLikeElement;
             if (isCallOrNewExpression(location)) {
-                callExpressionLike = <CallExpression | NewExpression>location;
+                callExpressionLike = location;
             }
             else if (isCallExpressionTarget(location) || isNewExpressionTarget(location)) {
                 callExpressionLike = <CallExpression | NewExpression>location.parent;
             }
             else if (location.parent && isJsxOpeningLikeElement(location.parent) && isFunctionLike(symbol.valueDeclaration)) {
-                callExpressionLike = <JsxOpeningLikeElement>location.parent;
+                callExpressionLike = location.parent;
             }
 
             if (callExpressionLike) {
@@ -367,16 +370,16 @@ namespace ts.SymbolDisplay {
                 const resolvedSymbol = typeChecker.getAliasedSymbol(symbol);
                 if (resolvedSymbol !== symbol && resolvedSymbol.declarations && resolvedSymbol.declarations.length > 0) {
                     const resolvedNode = resolvedSymbol.declarations[0];
-                    const declarationName = ts.getNameOfDeclaration(resolvedNode);
+                    const declarationName = getNameOfDeclaration(resolvedNode);
                     if (declarationName) {
                         const isExternalModuleDeclaration =
-                            ts.isModuleWithStringLiteralName(resolvedNode) &&
-                            ts.hasModifier(resolvedNode, ModifierFlags.Ambient);
+                            isModuleWithStringLiteralName(resolvedNode) &&
+                            hasModifier(resolvedNode, ModifierFlags.Ambient);
                         const shouldUseAliasName = symbol.name !== "default" && !isExternalModuleDeclaration;
                         const resolvedInfo = getSymbolDisplayPartsDocumentationAndSymbolKind(
                             typeChecker,
                             resolvedSymbol,
-                            ts.getSourceFileOfNode(resolvedNode),
+                            getSourceFileOfNode(resolvedNode),
                             resolvedNode,
                             declarationName,
                             semanticMeaning,
@@ -404,7 +407,7 @@ namespace ts.SymbolDisplay {
             }
             displayParts.push(spacePart());
             addFullSymbolName(symbol);
-            ts.forEach(symbol.declarations, declaration => {
+            forEach(symbol.declarations, declaration => {
                 if (declaration.kind === SyntaxKind.ImportEqualsDeclaration) {
                     const importEqualsDeclaration = <ImportEqualsDeclaration>declaration;
                     if (isExternalModuleImportEqualsDeclaration(importEqualsDeclaration)) {
@@ -605,7 +608,7 @@ namespace ts.SymbolDisplay {
             return false; // This is exported symbol
         }
 
-        return ts.forEach(symbol.declarations, declaration => {
+        return forEach(symbol.declarations, declaration => {
             // Function expressions are local
             if (declaration.kind === SyntaxKind.FunctionExpression) {
                 return true;

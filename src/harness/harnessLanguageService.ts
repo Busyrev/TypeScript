@@ -143,7 +143,7 @@ namespace Harness.LanguageService {
 
         public getScriptInfo(fileName: string): ScriptInfo {
             const fileEntry = this.virtualFileSystem.traversePath(fileName);
-            return fileEntry && fileEntry.isFile() ? (<Utils.VirtualFile>fileEntry).content : undefined;
+            return fileEntry && fileEntry.isFile() ? fileEntry.content : undefined;
         }
 
         public addScript(fileName: string, content: string, isRootFile: boolean): void {
@@ -189,13 +189,10 @@ namespace Harness.LanguageService {
         getCancellationToken() { return this.cancellationToken; }
         getDirectories(path: string): string[] {
             const dir = this.virtualFileSystem.traversePath(path);
-            if (dir && dir.isDirectory()) {
-                return ts.map((<Utils.VirtualDirectory>dir).getDirectories(), (d) => ts.combinePaths(path, d.name));
-            }
-            return [];
+            return dir && dir.isDirectory() ? dir.getDirectories().map(d => d.name) : [];
         }
         getCurrentDirectory(): string { return virtualFileSystemRoot; }
-        getDefaultLibFileName(): string { return Harness.Compiler.defaultLibFileName; }
+        getDefaultLibFileName(): string { return Compiler.defaultLibFileName; }
         getScriptFileNames(): string[] {
             return this.getFilenames().filter(ts.isAnySupportedFileExtension);
         }
@@ -405,6 +402,9 @@ namespace Harness.LanguageService {
         getSemanticDiagnostics(fileName: string): ts.Diagnostic[] {
             return unwrapJSONCallResult(this.shim.getSemanticDiagnostics(fileName));
         }
+        getSuggestionDiagnostics(fileName: string): ts.Diagnostic[] {
+            return unwrapJSONCallResult(this.shim.getSuggestionDiagnostics(fileName));
+        }
         getCompilerOptionsDiagnostics(): ts.Diagnostic[] {
             return unwrapJSONCallResult(this.shim.getCompilerOptionsDiagnostics());
         }
@@ -420,11 +420,11 @@ namespace Harness.LanguageService {
         getEncodedSemanticClassifications(fileName: string, span: ts.TextSpan): ts.Classifications {
             return unwrapJSONCallResult(this.shim.getEncodedSemanticClassifications(fileName, span.start, span.length));
         }
-        getCompletionsAtPosition(fileName: string, position: number, options: ts.GetCompletionsAtPositionOptions | undefined): ts.CompletionInfo {
-            return unwrapJSONCallResult(this.shim.getCompletionsAtPosition(fileName, position, options));
+        getCompletionsAtPosition(fileName: string, position: number, preferences: ts.UserPreferences | undefined): ts.CompletionInfo {
+            return unwrapJSONCallResult(this.shim.getCompletionsAtPosition(fileName, position, preferences));
         }
-        getCompletionEntryDetails(fileName: string, position: number, entryName: string, options: ts.FormatCodeOptions | undefined, source: string | undefined): ts.CompletionEntryDetails {
-            return unwrapJSONCallResult(this.shim.getCompletionEntryDetails(fileName, position, entryName, JSON.stringify(options), source));
+        getCompletionEntryDetails(fileName: string, position: number, entryName: string, formatOptions: ts.FormatCodeOptions | undefined, source: string | undefined, preferences: ts.UserPreferences | undefined): ts.CompletionEntryDetails {
+            return unwrapJSONCallResult(this.shim.getCompletionEntryDetails(fileName, position, entryName, JSON.stringify(formatOptions), source, preferences));
         }
         getCompletionEntrySymbol(): ts.Symbol {
             throw new Error("getCompletionEntrySymbol not implemented across the shim layer.");
@@ -523,6 +523,9 @@ namespace Harness.LanguageService {
             throw new Error("Not supported on the shim.");
         }
         getApplicableRefactors(): ts.ApplicableRefactorInfo[] {
+            throw new Error("Not supported on the shim.");
+        }
+        organizeImports(_scope: ts.OrganizeImportsScope, _formatOptions: ts.FormatCodeSettings): ReadonlyArray<ts.FileTextChanges> {
             throw new Error("Not supported on the shim.");
         }
         getEmitOutput(fileName: string): ts.EmitOutput {
@@ -638,8 +641,8 @@ namespace Harness.LanguageService {
         }
 
         readFile(fileName: string): string | undefined {
-            if (fileName.indexOf(Harness.Compiler.defaultLibFileName) >= 0) {
-                fileName = Harness.Compiler.defaultLibFileName;
+            if (ts.stringContains(fileName, Compiler.defaultLibFileName)) {
+                fileName = Compiler.defaultLibFileName;
             }
 
             const snapshot = this.host.getScriptSnapshot(fileName);
