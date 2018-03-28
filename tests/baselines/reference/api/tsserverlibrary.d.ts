@@ -1826,6 +1826,14 @@ declare namespace ts {
         getSuggestionForNonexistentSymbol(location: Node, name: string, meaning: SymbolFlags): string | undefined;
         getBaseConstraintOfType(type: Type): Type | undefined;
         getDefaultFromTypeParameter(type: Type): Type | undefined;
+        /**
+         * For a union, will include a property if it's defined in *any* of the member types.
+         * So for `{ a } | { b }`, this will include both `a` and `b`.
+         * Does not include properties of primitive types.
+         */
+        isArrayLikeType(type: Type): boolean;
+        isArrayType(type: Type): boolean;
+        isTypeAny(type: Type): boolean;
     }
     enum NodeBuilderFlags {
         None = 0,
