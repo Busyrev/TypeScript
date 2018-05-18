@@ -1419,6 +1419,7 @@ namespace ts {
          * Skip errors if previous line start with '// @ts-ignore' comment, not counting non-empty non-comment lines
          */
         function shouldReportDiagnostic(diagnostic: Diagnostic) {
+            if (diagnostic.code === 17009) return false; // super_must_be_called_before_accessing_this_in_the_constructor_of_a_derived_class
             const { file, start } = diagnostic;
             if (file) {
                 const lineStarts = getLineStarts(file);
