@@ -1,11 +1,3 @@
-// Copyright (c) Microsoft. All rights reserved. Licensed under the Apache License, Version 2.0.
-// See LICENSE.txt in the project root for complete license information.
-
-/// <reference path='../compiler/types.ts' />
-/// <reference path='../compiler/core.ts' />
-/// <reference path='../compiler/commandLineParser.ts' />
-/// <reference path='../services/semver.ts' />
-
 /* @internal */
 namespace ts.JsTyping {
 
@@ -40,14 +32,46 @@ namespace ts.JsTyping {
 
     /* @internal */
     export const nodeCoreModuleList: ReadonlyArray<string> = [
-        "buffer", "querystring", "events", "http", "cluster",
-        "zlib", "os", "https", "punycode", "repl", "readline",
-        "vm", "child_process", "url", "dns", "net",
-        "dgram", "fs", "path", "string_decoder", "tls",
-        "crypto", "stream", "util", "assert", "tty", "domain",
-        "constants", "process", "v8", "timers", "console"];
+        "assert",
+        "async_hooks",
+        "buffer",
+        "child_process",
+        "cluster",
+        "console",
+        "constants",
+        "crypto",
+        "dgram",
+        "dns",
+        "domain",
+        "events",
+        "fs",
+        "http",
+        "https",
+        "http2",
+        "inspector",
+        "net",
+        "os",
+        "path",
+        "perf_hooks",
+        "process",
+        "punycode",
+        "querystring",
+        "readline",
+        "repl",
+        "stream",
+        "string_decoder",
+        "timers",
+        "tls",
+        "tty",
+        "url",
+        "util",
+        "v8",
+        "vm",
+        "zlib"
+    ];
 
-    const nodeCoreModules = arrayToSet(nodeCoreModuleList);
+    /* @internal */
+    export const nodeCoreModules = arrayToSet(nodeCoreModuleList);
 
     /**
      * A map of loose file names to library names that we are confident require typings

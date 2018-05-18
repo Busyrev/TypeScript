@@ -1,6 +1,3 @@
-/// <reference path="../refactorProvider.ts" />
-/// <reference path="../../compiler/checker.ts" />
-
 /* @internal */
 namespace ts.refactor.extractSymbol {
     const refactorName = "Extract Symbol";
@@ -11,7 +8,7 @@ namespace ts.refactor.extractSymbol {
      * Exported for tests.
      */
     export function getAvailableActions(context: RefactorContext): ApplicableRefactorInfo[] | undefined {
-        const rangeToExtract = getRangeToExtract(context.file, { start: context.startPosition, length: getRefactorContextLength(context) });
+        const rangeToExtract = getRangeToExtract(context.file, getRefactorContextSpan(context));
 
         const targetRange: TargetRange = rangeToExtract.targetRange;
         if (targetRange === undefined) {
@@ -90,7 +87,7 @@ namespace ts.refactor.extractSymbol {
 
     /* Exported for tests */
     export function getEditsForAction(context: RefactorContext, actionName: string): RefactorEditInfo | undefined {
-        const rangeToExtract = getRangeToExtract(context.file, { start: context.startPosition, length: getRefactorContextLength(context) });
+        const rangeToExtract = getRangeToExtract(context.file, getRefactorContextSpan(context));
         const targetRange: TargetRange = rangeToExtract.targetRange;
 
         const parsedFunctionIndexMatch = /^function_scope_(\d+)$/.exec(actionName);
@@ -701,14 +698,6 @@ namespace ts.refactor.extractSymbol {
         Global,
     }
 
-    function getUniqueName(baseName: string, fileText: string): string {
-        let nameText = baseName;
-        for (let i = 1; stringContains(fileText, nameText); i++) {
-            nameText = `${baseName}_${i}`;
-        }
-        return nameText;
-    }
-
     /**
      * Result of 'extractRange' operation for a specific scope.
      * Stores either a list of changes that should be applied to extract a range or a list of errors
@@ -1129,37 +1118,6 @@ namespace ts.refactor.extractSymbol {
         }
     }
 
-    /**
-     * @return The index of the (only) reference to the extracted symbol.  We want the cursor
-     * to be on the reference, rather than the declaration, because it's closer to where the
-     * user was before extracting it.
-     */
-    function getRenameLocation(edits: ReadonlyArray<FileTextChanges>, renameFilename: string, functionNameText: string, isDeclaredBeforeUse: boolean): number {
-        let delta = 0;
-        let lastPos = -1;
-        for (const { fileName, textChanges } of edits) {
-            Debug.assert(fileName === renameFilename);
-            for (const change of textChanges) {
-                const { span, newText } = change;
-                const index = newText.indexOf(functionNameText);
-                if (index !== -1) {
-                    lastPos = span.start + delta + index;
-
-                    // If the reference comes first, return immediately.
-                    if (!isDeclaredBeforeUse) {
-                        return lastPos;
-                    }
-                }
-                delta += newText.length - span.length;
-            }
-        }
-
-        // If the declaration comes first, return the position of the last occurrence.
-        Debug.assert(isDeclaredBeforeUse);
-        Debug.assert(lastPos >= 0);
-        return lastPos;
-    }
-
     function getFirstDeclaration(type: Type): Declaration | undefined {
         let firstDeclaration;
 
@@ -1506,8 +1464,8 @@ namespace ts.refactor.extractSymbol {
                 }
 
                 // Note that we add the current node's type parameters *after* updating the corresponding scope.
-                if (isDeclarationWithTypeParameters(curr) && curr.typeParameters) {
-                    for (const typeParameterDecl of curr.typeParameters) {
+                if (isDeclarationWithTypeParameters(curr) && getEffectiveTypeParameterDeclarations(curr)) {
+                    for (const typeParameterDecl of getEffectiveTypeParameterDeclarations(curr)) {
                         const typeParameter = checker.getTypeAtLocation(typeParameterDecl) as TypeParameter;
                         if (allTypeParameterUsages.has(typeParameter.id.toString())) {
                             seenTypeParameterUsages.set(typeParameter.id.toString(), typeParameter);
@@ -1578,8 +1536,8 @@ namespace ts.refactor.extractSymbol {
 
         function hasTypeParameters(node: Node) {
             return isDeclarationWithTypeParameters(node) &&
-                node.typeParameters !== undefined &&
-                node.typeParameters.length > 0;
+                getEffectiveTypeParameterDeclarations(node) &&
+                getEffectiveTypeParameterDeclarations(node).length > 0;
         }
 
         function isInGenericContext(node: Node) {
@@ -1600,8 +1558,8 @@ namespace ts.refactor.extractSymbol {
             const {visitedTypes} = symbolWalker.walkType(type);
 
             for (const visitedType of visitedTypes) {
-                if (visitedType.flags & TypeFlags.TypeParameter) {
-                    allTypeParameterUsages.set(visitedType.id.toString(), visitedType as TypeParameter);
+                if (visitedType.isTypeParameter()) {
+                    allTypeParameterUsages.set(visitedType.id.toString(), visitedType);
                 }
             }
         }

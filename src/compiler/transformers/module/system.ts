@@ -1,7 +1,3 @@
-/// <reference path="../../factory.ts" />
-/// <reference path="../../visitor.ts" />
-/// <reference path="../destructuring.ts" />
-
 /*@internal*/
 namespace ts {
     export function transformSystemModule(context: TransformationContext) {
@@ -43,7 +39,7 @@ namespace ts {
         let enclosingBlockScopedContainer: Node;
         let noSubstitution: boolean[]; // Set of nodes for which substitution rules should be ignored.
 
-        return transformSourceFile;
+        return chainBundle(transformSourceFile);
 
         /**
          * Transforms the module aspects of a SourceFile.
@@ -261,7 +257,7 @@ namespace ts {
             // We emit hoisted variables early to align roughly with our previous emit output.
             // Two key differences in this approach are:
             // - Temporary variables will appear at the top rather than at the bottom of the file
-            addRange(statements, endLexicalEnvironment());
+            prependRange(statements, endLexicalEnvironment());
 
             const exportStarFunction = addExportStarIfNeeded(statements);
             const moduleObject = createObjectLiteral([
@@ -912,6 +908,12 @@ namespace ts {
             if (statements) {
                 delete deferredExports[id];
                 return append(statements, node);
+            }
+            else {
+                const original = getOriginalNode(node);
+                if (isModuleOrEnumDeclaration(original)) {
+                    return append(appendExportsOfDeclaration(statements, original), node);
+                }
             }
 
             return node;

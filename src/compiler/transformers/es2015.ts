@@ -1,7 +1,3 @@
-/// <reference path="../factory.ts" />
-/// <reference path="../visitor.ts" />
-/// <reference path="./destructuring.ts" />
-
 /*@internal*/
 namespace ts {
     const enum ES2015SubstitutionFlags {
@@ -299,7 +295,7 @@ namespace ts {
          */
         let enabledSubstitutions: ES2015SubstitutionFlags;
 
-        return transformSourceFile;
+        return chainBundle(transformSourceFile);
 
         function transformSourceFile(node: SourceFile) {
             if (node.isDeclarationFile) {
@@ -533,7 +529,7 @@ namespace ts {
                     createVariableStatement(/*modifiers*/ undefined,
                         createVariableDeclarationList(taggedTemplateStringDeclarations)));
             }
-            addRange(statements, endLexicalEnvironment());
+            prependRange(statements, endLexicalEnvironment());
             exitSubtree(ancestorFacts, HierarchyFacts.None, HierarchyFacts.None);
             return updateSourceFileNode(
                 node,
@@ -561,7 +557,7 @@ namespace ts {
         }
 
         function returnCapturedThis(node: Node): ReturnStatement {
-            return setOriginalNode(createReturn(createIdentifier("_this")), node);
+            return setOriginalNode(createReturn(createFileLevelUniqueName("_this")), node);
         }
 
         function visitReturnStatement(node: ReturnStatement): Statement {
@@ -779,7 +775,7 @@ namespace ts {
                 /*asteriskToken*/ undefined,
                 /*name*/ undefined,
                 /*typeParameters*/ undefined,
-                extendsClauseElement ? [createParameter(/*decorators*/ undefined, /*modifiers*/ undefined, /*dotDotDotToken*/ undefined, "_super")] : [],
+                extendsClauseElement ? [createParameter(/*decorators*/ undefined, /*modifiers*/ undefined, /*dotDotDotToken*/ undefined, createFileLevelUniqueName("_super"))] : [],
                 /*type*/ undefined,
                 transformClassBody(node, extendsClauseElement)
             );
@@ -840,7 +836,7 @@ namespace ts {
             setEmitFlags(statement, EmitFlags.NoComments | EmitFlags.NoTokenSourceMaps);
             statements.push(statement);
 
-            addRange(statements, endLexicalEnvironment());
+            prependRange(statements, endLexicalEnvironment());
 
             const block = createBlock(setTextRange(createNodeArray(statements), /*location*/ node.members), /*multiLine*/ true);
             setEmitFlags(block, EmitFlags.NoComments);
@@ -978,12 +974,12 @@ namespace ts {
                 && !(constructor && isSufficientlyCoveredByReturnStatements(constructor.body))) {
                 statements.push(
                     createReturn(
-                        createIdentifier("_this")
+                        createFileLevelUniqueName("_this")
                     )
                 );
             }
 
-            addRange(statements, endLexicalEnvironment());
+            prependRange(statements, endLexicalEnvironment());
 
             if (constructor) {
                 prependCaptureNewTargetIfNeeded(statements, constructor, /*copyOnWrite*/ false);
@@ -1142,11 +1138,11 @@ namespace ts {
             return createLogicalOr(
                 createLogicalAnd(
                     createStrictInequality(
-                        createIdentifier("_super"),
+                        createFileLevelUniqueName("_super"),
                         createNull()
                     ),
                     createFunctionApply(
-                        createIdentifier("_super"),
+                        createFileLevelUniqueName("_super"),
                         createActualThis(),
                         createIdentifier("arguments"),
                     )
@@ -1452,7 +1448,7 @@ namespace ts {
                 /*modifiers*/ undefined,
                 createVariableDeclarationList([
                     createVariableDeclaration(
-                        "_this",
+                        createFileLevelUniqueName("_this"),
                         /*type*/ undefined,
                         initializer
                     )
@@ -1517,7 +1513,7 @@ namespace ts {
                     /*modifiers*/ undefined,
                     createVariableDeclarationList([
                         createVariableDeclaration(
-                            "_newTarget",
+                            createFileLevelUniqueName("_newTarget"),
                             /*type*/ undefined,
                             newTarget
                         )
@@ -1889,6 +1885,7 @@ namespace ts {
                 const expression = visitNode(body, visitor, isExpression);
                 const returnStatement = createReturn(expression);
                 setTextRange(returnStatement, body);
+                moveSyntheticComments(returnStatement, body);
                 setEmitFlags(returnStatement, EmitFlags.NoTokenSourceMaps | EmitFlags.NoTrailingSourceMap | EmitFlags.NoTrailingComments);
                 statements.push(returnStatement);
 
@@ -1898,7 +1895,7 @@ namespace ts {
             }
 
             const lexicalEnvironment = context.endLexicalEnvironment();
-            addRange(statements, lexicalEnvironment);
+            prependRange(statements, lexicalEnvironment);
 
             prependCaptureNewTargetIfNeeded(statements, node, /*copyOnWrite*/ false);
 
@@ -2716,7 +2713,7 @@ namespace ts {
                 if (loopOutParameters.length) {
                     copyOutParameters(loopOutParameters, CopyDirection.ToOutParameter, statements);
                 }
-                addRange(statements, lexicalEnvironment);
+                prependRange(statements, lexicalEnvironment);
                 loopBody = createBlock(statements, /*multiline*/ true);
             }
 
@@ -3313,10 +3310,12 @@ namespace ts {
             // expression, but we will restore them later to preserve comments and source maps.
             const body = cast(cast(skipOuterExpressions(node.expression), isArrowFunction).body, isBlock);
 
-            // The class statements are the statements generated by visiting the first statement of the
+            // The class statements are the statements generated by visiting the first statement with initializer of the
             // body (1), while all other statements are added to remainingStatements (2)
-            const classStatements = visitNodes(body.statements, visitor, isStatement, 0, 1);
-            const remainingStatements = visitNodes(body.statements, visitor, isStatement, 1, body.statements.length - 1);
+            const isVariableStatementWithInitializer = (stmt: Statement) => isVariableStatement(stmt) && !!firstOrUndefined(stmt.declarationList.declarations).initializer;
+            const bodyStatements = visitNodes(body.statements, visitor, isStatement);
+            const classStatements = filter(bodyStatements, isVariableStatementWithInitializer);
+            const remainingStatements = filter(bodyStatements, stmt => !isVariableStatementWithInitializer(stmt));
             const varStatement = cast(firstOrUndefined(classStatements), isVariableStatement);
 
             // We know there is only one variable declaration here as we verified this in an
@@ -3328,6 +3327,7 @@ namespace ts {
             // we see as an assignment, for example:
             //
             //  (function () {
+            //      var C_1;
             //      var C = C_1 = (function () {
             //          function C() {
             //          }
@@ -3336,7 +3336,6 @@ namespace ts {
             //      }());
             //      C = C_1 = __decorate([dec], C);
             //      return C;
-            //      var C_1;
             //  }())
             //
             const aliasAssignment = tryCast(initializer, isAssignmentExpression);
@@ -3490,7 +3489,7 @@ namespace ts {
                             actualThis
                         );
                     resultingCall = assignToCapturedThis
-                        ? createAssignment(createIdentifier("_this"), initializer)
+                        ? createAssignment(createFileLevelUniqueName("_this"), initializer)
                         : initializer;
                 }
                 return setOriginalNode(resultingCall, node);
@@ -3811,8 +3810,8 @@ namespace ts {
         function visitSuperKeyword(isExpressionOfCall: boolean): LeftHandSideExpression {
             return hierarchyFacts & HierarchyFacts.NonStaticClassElement
                 && !isExpressionOfCall
-                    ? createPropertyAccess(createIdentifier("_super"), "prototype")
-                    : createIdentifier("_super");
+                    ? createPropertyAccess(createFileLevelUniqueName("_super"), "prototype")
+                    : createFileLevelUniqueName("_super");
         }
 
         function visitMetaProperty(node: MetaProperty) {
@@ -3823,7 +3822,7 @@ namespace ts {
                 else {
                     hierarchyFacts |= HierarchyFacts.NewTarget;
                 }
-                return createIdentifier("_newTarget");
+                return createFileLevelUniqueName("_newTarget");
             }
             return node;
         }
@@ -4000,7 +3999,7 @@ namespace ts {
         function substituteThisKeyword(node: PrimaryExpression): PrimaryExpression {
             if (enabledSubstitutions & ES2015SubstitutionFlags.CapturedThis
                 && hierarchyFacts & HierarchyFacts.CapturesThis) {
-                return setTextRange(createIdentifier("_this"), node);
+                return setTextRange(createFileLevelUniqueName("_this"), node);
             }
             return node;
         }
@@ -4052,7 +4051,7 @@ namespace ts {
             /*typeArguments*/ undefined,
             [
                 name,
-                createIdentifier("_super")
+                createFileLevelUniqueName("_super")
             ]
         );
     }

@@ -1,5 +1,3 @@
-/// <reference path="core.ts"/>
-
 declare function setTimeout(handler: (...args: any[]) => void, timeout: number): any;
 declare function clearTimeout(handle: any): void;
 
@@ -334,9 +332,10 @@ namespace ts {
     /*@internal*/
     export interface RecursiveDirectoryWatcherHost {
         watchDirectory: HostWatchDirectory;
-        getAccessileSortedChildDirectories(path: string): ReadonlyArray<string>;
+        getAccessibleSortedChildDirectories(path: string): ReadonlyArray<string>;
         directoryExists(dir: string): boolean;
         filePathComparer: Comparer<string>;
+        realpath(s: string): string;
     }
 
     /**
@@ -392,9 +391,14 @@ namespace ts {
         function watchChildDirectories(parentDir: string, existingChildWatches: ChildWatches, callback: DirectoryWatcherCallback): ChildWatches {
             let newChildWatches: DirectoryWatcher[] | undefined;
             enumerateInsertsAndDeletes<string, DirectoryWatcher>(
-                host.directoryExists(parentDir) ? host.getAccessileSortedChildDirectories(parentDir) : emptyArray,
+                host.directoryExists(parentDir) ? mapDefined(host.getAccessibleSortedChildDirectories(parentDir), child => {
+                    const childFullName = getNormalizedAbsolutePath(child, parentDir);
+                    // Filter our the symbolic link directories since those arent included in recursive watch
+                    // which is same behaviour when recursive: true is passed to fs.watch
+                    return host.filePathComparer(childFullName, host.realpath(childFullName)) === Comparison.EqualTo ? childFullName : undefined;
+                }) : emptyArray,
                 existingChildWatches,
-                (child, childWatcher) => host.filePathComparer(getNormalizedAbsolutePath(child, parentDir), childWatcher.dirName),
+                (child, childWatcher) => host.filePathComparer(child, childWatcher.dirName),
                 createAndAddChildDirectoryWatcher,
                 closeFileWatcher,
                 addChildDirectoryWatcher
@@ -406,7 +410,7 @@ namespace ts {
              * Create new childDirectoryWatcher and add it to the new ChildDirectoryWatcher list
              */
             function createAndAddChildDirectoryWatcher(childName: string) {
-                const result = createDirectoryWatcher(getNormalizedAbsolutePath(childName, parentDir), callback);
+                const result = createDirectoryWatcher(childName, callback);
                 addChildDirectoryWatcher(result);
             }
 
@@ -424,6 +428,7 @@ namespace ts {
         newLine: string;
         useCaseSensitiveFileNames: boolean;
         write(s: string): void;
+        writeOutputIsTTY?(): boolean;
         readFile(path: string, encoding?: string): string | undefined;
         getFileSize?(path: string): number;
         writeFile(path: string, data: string, writeByteOrderMark?: boolean): void;
@@ -443,10 +448,11 @@ namespace ts {
         readDirectory(path: string, extensions?: ReadonlyArray<string>, exclude?: ReadonlyArray<string>, include?: ReadonlyArray<string>, depth?: number): string[];
         getModifiedTime?(path: string): Date;
         /**
-         * This should be cryptographically secure.
          * A good implementation is node.js' `crypto.createHash`. (https://nodejs.org/api/crypto.html#crypto_crypto_createhash_algorithm)
          */
         createHash?(data: string): string;
+        /** This must be cryptographically secure. Only implement this method using `crypto.createHash("sha256")`. */
+        createSHA256Hash?(data: string): string;
         getMemoryUsage?(): number;
         exit(exitCode?: number): void;
         realpath?(path: string): string;
@@ -522,7 +528,7 @@ namespace ts {
             const _path = require("path");
             const _os = require("os");
             // crypto can be absent on reduced node installations
-            let _crypto: any;
+            let _crypto: typeof import("crypto");
             try {
               _crypto = require("crypto");
             }
@@ -557,6 +563,9 @@ namespace ts {
                 write(s: string): void {
                     process.stdout.write(s);
                 },
+                writeOutputIsTTY() {
+                    return process.stdout.isTTY;
+                },
                 readFile,
                 writeFile,
                 watchFile: getWatchFile(),
@@ -582,6 +591,7 @@ namespace ts {
                 readDirectory,
                 getModifiedTime,
                 createHash: _crypto ? createMD5HashUsingNativeCrypto : generateDjb2Hash,
+                createSHA256Hash: _crypto ? createSHA256Hash : undefined,
                 getMemoryUsage() {
                     if (global.gc) {
                         global.gc();
@@ -601,14 +611,7 @@ namespace ts {
                 exit(exitCode?: number): void {
                     process.exit(exitCode);
                 },
-                realpath(path: string): string {
-                    try {
-                        return _fs.realpathSync(path);
-                    }
-                    catch {
-                        return path;
-                    }
-                },
+                realpath,
                 debugMode: some(<string[]>process.execArgv, arg => /^--(inspect|debug)(-brk)?(=\d+)?$/i.test(arg)),
                 tryEnableSourceMapsForHost() {
                     try {
@@ -697,10 +700,11 @@ namespace ts {
                         createWatchDirectoryUsing(dynamicPollingWatchFile || createDynamicPriorityPollingWatchFile({ getModifiedTime, setTimeout })) :
                         watchDirectoryUsingFsWatch;
                 const watchDirectoryRecursively = createRecursiveDirectoryWatcher({
-                    filePathComparer: useCaseSensitiveFileNames ? compareStringsCaseSensitive : compareStringsCaseInsensitive,
+                    filePathComparer: getStringComparer(!useCaseSensitiveFileNames),
                     directoryExists,
-                    getAccessileSortedChildDirectories: path => getAccessibleFileSystemEntries(path).directories,
-                    watchDirectory
+                    getAccessibleSortedChildDirectories: path => getAccessibleFileSystemEntries(path).directories,
+                    watchDirectory,
+                    realpath
                 });
 
                 return (directoryName, callback, recursive) => {
@@ -1043,6 +1047,15 @@ namespace ts {
                 return filter<string>(_fs.readdirSync(path), dir => fileSystemEntryExists(combinePaths(path, dir), FileSystemEntryKind.Directory));
             }
 
+            function realpath(path: string): string {
+                try {
+                    return _fs.realpathSync(path);
+                }
+                catch {
+                    return path;
+                }
+            }
+
             function getModifiedTime(path: string) {
                 try {
                     return _fs.statSync(path).mtime;
@@ -1061,8 +1074,14 @@ namespace ts {
                 return `${chars.reduce((prev, curr) => ((prev << 5) + prev) + curr, 5381)}`;
             }
 
-            function createMD5HashUsingNativeCrypto(data: string) {
+            function createMD5HashUsingNativeCrypto(data: string): string {
                 const hash = _crypto.createHash("md5");
+                hash.update(data);
+                return hash.digest("hex");
+            }
+
+            function createSHA256Hash(data: string): string {
+                const hash = _crypto.createHash("sha256");
                 hash.update(data);
                 return hash.digest("hex");
             }

@@ -1,7 +1,7 @@
 /* @internal */
 namespace ts.DocumentHighlights {
     export function getDocumentHighlights(program: Program, cancellationToken: CancellationToken, sourceFile: SourceFile, position: number, sourceFilesToSearch: ReadonlyArray<SourceFile>): DocumentHighlights[] | undefined {
-        const node = getTouchingWord(sourceFile, position, /*includeJsDocComment*/ true);
+        const node = getTouchingPropertyName(sourceFile, position, /*includeJsDocComment*/ true);
 
         if (node.parent && (isJsxOpeningElement(node.parent) && node.parent.tagName === node || isJsxClosingElement(node.parent))) {
             // For a JSX element, just highlight the matching tag, not all references.
@@ -22,10 +22,20 @@ namespace ts.DocumentHighlights {
     }
 
     function getSemanticDocumentHighlights(position: number, node: Node, program: Program, cancellationToken: CancellationToken, sourceFilesToSearch: ReadonlyArray<SourceFile>): DocumentHighlights[] | undefined {
-        const referenceEntries = FindAllReferences.getReferenceEntriesForNode(position, node, program, sourceFilesToSearch, cancellationToken);
+        const sourceFilesSet = arrayToSet(sourceFilesToSearch, f => f.fileName);
+        const referenceEntries = FindAllReferences.getReferenceEntriesForNode(position, node, program, sourceFilesToSearch, cancellationToken, /*options*/ undefined, sourceFilesSet);
         if (!referenceEntries) return undefined;
         const map = arrayToMultiMap(referenceEntries.map(FindAllReferences.toHighlightSpan), e => e.fileName, e => e.span);
-        return arrayFrom(map.entries(), ([fileName, highlightSpans]) => ({ fileName, highlightSpans }));
+        return arrayFrom(map.entries(), ([fileName, highlightSpans]) => {
+            if (!sourceFilesSet.has(fileName)) {
+                Debug.assert(program.redirectTargetsSet.has(fileName));
+                const redirectTarget = program.getSourceFile(fileName);
+                const redirect = find(sourceFilesToSearch, f => f.redirectInfo && f.redirectInfo.redirectTarget === redirectTarget)!;
+                fileName = redirect.fileName;
+                Debug.assert(sourceFilesSet.has(fileName));
+            }
+            return { fileName, highlightSpans };
+        });
     }
 
     function getSyntacticDocumentHighlights(node: Node, sourceFile: SourceFile): DocumentHighlights[] {
@@ -64,6 +74,10 @@ namespace ts.DocumentHighlights {
             case SyntaxKind.GetKeyword:
             case SyntaxKind.SetKeyword:
                 return getFromAllDeclarations(isAccessor, [SyntaxKind.GetKeyword, SyntaxKind.SetKeyword]);
+            case SyntaxKind.AwaitKeyword:
+                return useParent(node.parent, isAwaitExpression, getAsyncAndAwaitOccurrences);
+            case SyntaxKind.AsyncKeyword:
+                return highlightSpans(getAsyncAndAwaitOccurrences(node));
             default:
                 return isModifierKind(node.kind) && (isDeclaration(node.parent) || isVariableStatement(node.parent))
                     ? highlightSpans(getModifierOccurrences(node.kind, node.parent))
@@ -356,6 +370,35 @@ namespace ts.DocumentHighlights {
         });
 
         return keywords;
+    }
+
+    function getAsyncAndAwaitOccurrences(node: Node): Node[] | undefined {
+        const func = <FunctionLikeDeclaration>getContainingFunction(node);
+        if (!func) {
+            return undefined;
+        }
+
+        const keywords: Node[] = [];
+
+        if (func.modifiers) {
+            func.modifiers.forEach(modifier => {
+                pushKeywordIf(keywords, modifier, SyntaxKind.AsyncKeyword);
+            });
+        }
+
+        forEachChild(func, aggregate);
+
+        return keywords;
+
+        function aggregate(node: Node): void {
+            if (isAwaitExpression(node)) {
+                pushKeywordIf(keywords, node.getFirstToken(), SyntaxKind.AwaitKeyword);
+            }
+            // Do not cross function boundaries.
+            if (!isFunctionLike(node) && !isClassLike(node) && !isInterfaceDeclaration(node) && !isModuleDeclaration(node) && !isTypeAliasDeclaration(node) && !isTypeNode(node)) {
+                forEachChild(node, aggregate);
+            }
+        }
     }
 
     function getIfElseOccurrences(ifStatement: IfStatement, sourceFile: SourceFile): HighlightSpan[] {

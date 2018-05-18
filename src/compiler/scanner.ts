@@ -1,6 +1,3 @@
-/// <reference path="core.ts"/>
-/// <reference path="diagnosticInformationMap.generated.ts"/>
-
 namespace ts {
     export type ErrorCallback = (message: DiagnosticMessage, length: number) => void;
 
@@ -696,8 +693,6 @@ namespace ts {
                                     // If we are not reducing and we have a truthy result, return it.
                                     return accumulator;
                                 }
-
-                                hasPendingCommentRange = false;
                             }
 
                             pendingPos = startPos;
@@ -1933,12 +1928,10 @@ namespace ts {
         }
 
         function scanJSDocToken(): JsDocSyntaxKind {
+            startPos = tokenPos = pos;
             if (pos >= end) {
                 return token = SyntaxKind.EndOfFileToken;
             }
-
-            startPos = pos;
-            tokenPos = pos;
 
             const ch = text.charCodeAt(pos);
             pos++;

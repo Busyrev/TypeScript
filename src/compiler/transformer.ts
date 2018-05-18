@@ -1,21 +1,6 @@
-/// <reference path="visitor.ts" />
-/// <reference path="transformers/utilities.ts" />
-/// <reference path="transformers/ts.ts" />
-/// <reference path="transformers/jsx.ts" />
-/// <reference path="transformers/esnext.ts" />
-/// <reference path="transformers/es2017.ts" />
-/// <reference path="transformers/es2016.ts" />
-/// <reference path="transformers/es2015.ts" />
-/// <reference path="transformers/generators.ts" />
-/// <reference path="transformers/es5.ts" />
-/// <reference path="transformers/module/module.ts" />
-/// <reference path="transformers/module/system.ts" />
-/// <reference path="transformers/module/es2015.ts" />
-/// <reference path="transformers/declarations.ts" />
-
 /* @internal */
 namespace ts {
-    function getModuleTransformer(moduleKind: ModuleKind): TransformerFactory<SourceFile> {
+    function getModuleTransformer(moduleKind: ModuleKind): TransformerFactory<SourceFile | Bundle> {
         switch (moduleKind) {
             case ModuleKind.ESNext:
             case ModuleKind.ES2015:
@@ -43,7 +28,7 @@ namespace ts {
         const jsx = compilerOptions.jsx;
         const languageVersion = getEmitScriptTarget(compilerOptions);
         const moduleKind = getEmitModuleKind(compilerOptions);
-        const transformers: TransformerFactory<SourceFile>[] = [];
+        const transformers: TransformerFactory<SourceFile | Bundle>[] = [];
 
         addRange(transformers, customTransformers && customTransformers.before);
 

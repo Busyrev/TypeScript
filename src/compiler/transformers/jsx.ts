@@ -1,14 +1,10 @@
-/// <reference path="../factory.ts" />
-/// <reference path="../visitor.ts" />
-/// <reference path="./esnext.ts" />
-
 /*@internal*/
 namespace ts {
     export function transformJsx(context: TransformationContext) {
         const compilerOptions = context.getCompilerOptions();
         let currentSourceFile: SourceFile;
 
-        return transformSourceFile;
+        return chainBundle(transformSourceFile);
 
         /**
          * Transform JSX-specific syntax in a SourceFile.

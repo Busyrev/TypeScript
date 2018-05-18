@@ -23,9 +23,17 @@
         "category": "Error",
         "code": 1010
     },
+    "An element access expression should take an argument.": {
+        "category": "Error",
+        "code": 1011
+    },
     "Unexpected token.": {
         "category": "Error",
         "code": 1012
+    },
+    "A rest parameter or binding pattern may not have a trailing comma.": {
+        "category": "Error",
+        "code": 1013
     },
     "A rest parameter must be last in a parameter list.": {
         "category": "Error",
@@ -887,7 +895,7 @@
         "category": "Error",
         "code": 1322
     },
-    "Dynamic import cannot be used when targeting ECMAScript 2015 modules.": {
+    "Dynamic import is only supported when '--module' flag is 'commonjs' or 'esNext'.": {
         "category": "Error",
         "code": 1323
     },
@@ -950,6 +958,22 @@
     "'infer' declarations are only permitted in the 'extends' clause of a conditional type.": {
         "category": "Error",
         "code": 1338
+    },
+    "Module '{0}' does not refer to a value, but is used as a value here.": {
+        "category": "Error",
+        "code": 1339
+    },
+    "Module '{0}' does not refer to a type, but is used as a type here.": {
+        "category": "Error",
+        "code": 1340
+    },
+    "Type arguments cannot be used here.": {
+        "category": "Error",
+        "code": 1342
+    },
+    "The 'import.meta' meta-property is only allowed using 'ESNext' for the 'target' and 'module' compiler options.": {
+        "category": "Error",
+        "code": 1343
     },
 
     "Duplicate identifier '{0}'.": {
@@ -1372,7 +1396,7 @@
         "category": "Error",
         "code": 2406
     },
-    "The right-hand side of a 'for...in' statement must be of type 'any', an object type or a type parameter.": {
+    "The right-hand side of a 'for...in' statement must be of type 'any', an object type or a type parameter, but here has type '{0}'.": {
         "category": "Error",
         "code": 2407
     },
@@ -1668,7 +1692,7 @@
         "category": "Error",
         "code": 2487
     },
-    "Type must have a '[Symbol.iterator]()' method that returns an iterator.": {
+    "Type '{0}' must have a '[Symbol.iterator]()' method that returns an iterator.": {
         "category": "Error",
         "code": 2488
     },
@@ -1732,7 +1756,7 @@
         "category": "Error",
         "code": 2503
     },
-    "Type must have a '[Symbol.asyncIterator]()' method that returns an async iterator.": {
+    "Type '{0}' must have a '[Symbol.asyncIterator]()' method that returns an async iterator.": {
         "category": "Error",
         "code": 2504
     },
@@ -1988,7 +2012,18 @@
         "category": "Error",
         "code": 2567
     },
-
+    "Type '{0}' is not an array type. Use compiler option '--downlevelIteration' to allow iterating of iterators.": {
+        "category": "Error",
+        "code": 2568
+    },
+    "Type '{0}' is not an array type or a string type. Use compiler option '--downlevelIteration' to allow iterating of iterators.": {
+        "category": "Error",
+        "code": 2569
+    },
+    "Property '{0}' does not exist on type '{1}'. Did you forget to use 'await'?": {
+        "category": "Error",
+        "code": 2570
+    },
     "JSX element attributes type '{0}' may not be a union type.": {
         "category": "Error",
         "code": 2600
@@ -2771,6 +2806,10 @@
         "category": "Error",
         "code": 5069
     },
+    "Option '--resolveJsonModule' cannot be specified without 'node' module resolution strategy.": {
+        "category": "Error",
+        "code": 5070
+    },
 
     "Generates a sourcemap for each corresponding '.d.ts' file.": {
         "category": "Message",
@@ -2915,10 +2954,6 @@
     "FILE OR DIRECTORY": {
         "category": "Message",
         "code": 6040
-    },
-    "Compilation complete. Watching for file changes.": {
-        "category": "Message",
-        "code": 6042
     },
     "Generates corresponding '.map' file.": {
         "category": "Message",
@@ -3258,7 +3293,8 @@
     },
     "'{0}' is declared but its value is never read.": {
         "category": "Error",
-        "code": 6133
+        "code": 6133,
+        "reportsUnnecessary": true
     },
     "Report errors on unused locals.": {
         "category": "Message",
@@ -3278,7 +3314,8 @@
     },
     "Property '{0}' is declared but its value is never read.": {
         "category": "Error",
-        "code": 6138
+        "code": 6138,
+        "reportsUnnecessary": true
     },
     "Import emit helpers from 'tslib'.": {
         "category": "Message",
@@ -3490,8 +3527,73 @@
     },
     "All imports in import declaration are unused.": {
         "category": "Error",
-        "code": 6192
+        "code": 6192,
+        "reportsUnnecessary": true
     },
+    "Found 1 error. Watching for file changes.": {
+        "category": "Message",
+        "code": 6193
+    },
+    "Found {0} errors. Watching for file changes.": {
+        "category": "Message",
+        "code": 6194
+    },
+    "Resolve 'keyof' to string valued property names only (no numbers or symbols).": {
+        "category": "Message",
+        "code": 6195
+    },
+    "'{0}' is declared but never used.": {
+        "category": "Error",
+        "code": 6196,
+        "reportsUnnecessary": true
+    },
+    "Include modules imported with '.json' extension": {
+        "category": "Message",
+        "code": 6197
+    },
+    "All destructured elements are unused.": {
+        "category": "Error",
+        "code": 6198,
+        "reportsUnnecessary": true
+    },
+
+    "Projects to reference": {
+        "category": "Message",
+        "code": 6300
+    },
+    "Enable project compilation": {
+        "category": "Message",
+        "code": 6302
+    },
+    "Project references may not form a circular graph. Cycle detected: {0}": {
+        "category": "Error",
+        "code": 6202
+    },
+    "Composite projects may not disable declaration emit.": {
+        "category": "Error",
+        "code": 6304
+    },
+    "Output file '{0}' has not been built from source file '{1}'.": {
+        "category": "Error",
+        "code": 6305
+    },
+    "Referenced project '{0}' must have setting \"composite\": true.": {
+        "category": "Error",
+        "code": 6306
+    },
+    "File '{0}' is not in project file list. Projects must list all files or use an 'include' pattern.": {
+        "category": "Error",
+        "code": 6307
+    },
+    "Cannot prepend project '{0}' because it does not have 'outFile' set": {
+        "category": "Error",
+        "code": 6308
+    },
+    "Output file '{0}' from project '{1}' does not exist": {
+        "category": "Error",
+        "code": 6309
+    },
+
     "Variable '{0}' implicitly has an '{1}' type.": {
         "category": "Error",
         "code": 7005
@@ -3570,7 +3672,8 @@
     },
     "Unused label.": {
         "category": "Error",
-        "code": 7028
+        "code": 7028,
+        "reportsUnnecessary": true
     },
     "Fallthrough case in switch.": {
         "category": "Error",
@@ -3850,6 +3953,10 @@
         "category": "Suggestion",
         "code": 80004
     },
+    "'require' call may be converted to an import.": {
+        "category": "Suggestion",
+        "code": 80005
+    },
 
     "Add missing 'super()' call": {
         "category": "Message",
@@ -3879,9 +3986,13 @@
         "category": "Message",
         "code": 90007
     },
-    "Add 'this.' to unresolved variable": {
+    "Add '{0}.' to unresolved variable": {
         "category": "Message",
         "code": 90008
+    },
+    "Remove destructuring": {
+        "category": "Message",
+        "code": 90009
     },
     "Import '{0}' from module \"{1}\"": {
         "category": "Message",
@@ -4087,7 +4198,7 @@
         "category": "Message",
         "code": 95036
     },
-    "Add 'this.' to all unresolved variables matching a member name": {
+    "Add qualifier to all unresolved variables matching a member name": {
         "category": "Message",
         "code": 95037
     },
@@ -4122,5 +4233,33 @@
     "Convert all constructor functions to classes": {
         "category": "Message",
         "code": 95045
+    },
+    "Generate 'get' and 'set' accessors": {
+        "category": "Message",
+        "code": 95046
+    },
+    "Convert 'require' to 'import'": {
+        "category": "Message",
+        "code": 95047
+    },
+    "Convert all 'require' to 'import'": {
+        "category": "Message",
+        "code": 95048
+    },
+    "Move to a new file": {
+        "category": "Message",
+        "code": 95049
+    },
+    "Remove unreachable code": {
+        "category": "Message",
+        "code": 95050
+    },
+    "Remove all unreachable code": {
+        "category": "Message",
+        "code": 95051
+    },
+    "Add missing typeof": {
+        "category": "Message",
+        "code": 95052
     }
 }

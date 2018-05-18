@@ -2,7 +2,7 @@
 namespace ts.Rename {
     export function getRenameInfo(typeChecker: TypeChecker, defaultLibFileName: string, getCanonicalFileName: GetCanonicalFileName, sourceFile: SourceFile, position: number): RenameInfo {
         const getCanonicalDefaultLibName = memoize(() => getCanonicalFileName(normalizePath(defaultLibFileName)));
-        const node = getTouchingWord(sourceFile, position, /*includeJsDocComment*/ true);
+        const node = getTouchingPropertyName(sourceFile, position, /*includeJsDocComment*/ true);
         const renameInfo = node && nodeIsEligibleForRename(node)
             ? getRenameInfoForNode(node, typeChecker, sourceFile, isDefinedInLibraryFile)
             : undefined;
@@ -35,6 +35,9 @@ namespace ts.Rename {
                 if (isIdentifier(node) && node.originalKeywordKind === SyntaxKind.DefaultKeyword && symbol.parent.flags & SymbolFlags.Module) {
                     return undefined;
                 }
+
+                // Can't rename a module name.
+                if (isStringLiteralLike(node) && tryGetImportFromModuleSpecifier(node)) return undefined;
 
                 const kind = SymbolDisplay.getSymbolKind(typeChecker, symbol, node);
                 const specifierName = (isImportOrExportSpecifierName(node) || isStringOrNumericLiteral(node) && node.parent.kind === SyntaxKind.ComputedPropertyName)
