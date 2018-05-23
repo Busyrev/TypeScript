@@ -1427,6 +1427,7 @@ namespace ts {
          */
         function shouldReportDiagnostic(diagnostic: Diagnostic) {
             if (diagnostic.code === 17009) return false; // super_must_be_called_before_accessing_this_in_the_constructor_of_a_derived_class
+            if (diagnostic.code === 2376) return false; // A_super_call_must_be_the_first_statement_in_the_constructor_when_a_class_contains_initialized_properties_or_has_parameter_properties
             const { file, start } = diagnostic;
             if (file) {
                 const lineStarts = getLineStarts(file);
