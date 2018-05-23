@@ -1896,7 +1896,7 @@ declare namespace ts {
          */
         isArrayLikeType(type: Type): boolean;
         isArrayType(type: Type): boolean;
-        isTypeAny(type: Type): boolean;
+        isTypeAny(type: Type | undefined): boolean | undefined;
         /**
          * Depending on the operation performed, it may be appropriate to throw away the checker
          * if the cancellation token is triggered. Typically, if it is used for error checking
