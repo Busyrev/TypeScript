@@ -63,6 +63,8 @@ namespace ts {
                     return visitAwaitExpression(node as AwaitExpression);
                 case SyntaxKind.YieldExpression:
                     return visitYieldExpression(node as YieldExpression);
+                case SyntaxKind.ReturnStatement:
+                    return visitReturnStatement(node as ReturnStatement);
                 case SyntaxKind.LabeledStatement:
                     return visitLabeledStatement(node as LabeledStatement);
                 case SyntaxKind.ObjectLiteralExpression:
@@ -156,6 +158,16 @@ namespace ts {
                     ),
                     node
                 );
+            }
+
+            return visitEachChild(node, visitor, context);
+        }
+
+        function visitReturnStatement(node: ReturnStatement) {
+            if (enclosingFunctionFlags & FunctionFlags.Async && enclosingFunctionFlags & FunctionFlags.Generator) {
+                return updateReturn(node, createDownlevelAwait(
+                    node.expression ? visitNode(node.expression, visitor, isExpression) : createVoidZero()
+                ));
             }
 
             return visitEachChild(node, visitor, context);
@@ -416,7 +428,7 @@ namespace ts {
                             createLogicalNot(getDone)
                         ),
                         /*incrementor*/ undefined,
-                        /*statement*/ convertForOfStatementHead(node, createDownlevelAwait(getValue))
+                        /*statement*/ convertForOfStatementHead(node, getValue)
                     ),
                     /*location*/ node
                 ),
@@ -663,7 +675,7 @@ namespace ts {
                 )
             );
 
-            prependRange(statements, endLexicalEnvironment());
+            prependStatements(statements, endLexicalEnvironment());
             const block = updateBlock(node.body!, statements);
 
             // Minor optimization, emit `_super` helper to capture `super` access in an arrow.
@@ -695,7 +707,7 @@ namespace ts {
             const leadingStatements = endLexicalEnvironment();
             if (statementOffset > 0 || some(statements) || some(leadingStatements)) {
                 const block = convertToFunctionBody(body, /*multiLine*/ true);
-                prependRange(statements, leadingStatements);
+                prependStatements(statements, leadingStatements);
                 addRange(statements, block.statements.slice(statementOffset));
                 return updateBlock(block, setTextRange(createNodeArray(statements), block.statements));
             }
@@ -878,13 +890,16 @@ namespace ts {
         scoped: false,
         priority: 1,
         text: `
-            var __assign = (this && this.__assign) || Object.assign || function(t) {
-                for (var s, i = 1, n = arguments.length; i < n; i++) {
-                    s = arguments[i];
-                    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
-                        t[p] = s[p];
-                }
-                return t;
+            var __assign = (this && this.__assign) || function () {
+                __assign = Object.assign || function(t) {
+                    for (var s, i = 1, n = arguments.length; i < n; i++) {
+                        s = arguments[i];
+                        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                            t[p] = s[p];
+                    }
+                    return t;
+                };
+                return __assign.apply(this, arguments);
             };`
     };
 
