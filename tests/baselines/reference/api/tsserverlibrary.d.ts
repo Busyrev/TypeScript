@@ -2713,6 +2713,7 @@ declare namespace ts {
          * So for `{ a } | { b }`, this will include both `a` and `b`.
          * Does not include properties of primitive types.
          */
+        isArrayLikeType(type: Type): boolean;
         getAllPossiblePropertiesOfTypes(type: ReadonlyArray<Type>): Symbol[];
         resolveName(name: string, location: Node, meaning: SymbolFlags, excludeGlobals: boolean): Symbol | undefined;
         getJsxNamespace(location?: Node): string;
@@ -2728,6 +2729,8 @@ declare namespace ts {
         getAccessibleSymbolChain(symbol: Symbol, enclosingDeclaration: Node | undefined, meaning: SymbolFlags, useOnlyExternalAliasing: boolean): Symbol[] | undefined;
         getTypePredicateOfSignature(signature: Signature): TypePredicate;
         resolveExternalModuleSymbol(symbol: Symbol): Symbol;
+        isArrayType(type: Type): boolean;
+        isTypeAny(type: Type | undefined): boolean | undefined;
         /** @param node A location where we might consider accessing `this`. Not necessarily a ThisExpression. */
         tryGetThisTypeAt(node: Node): Type | undefined;
         getTypeArgumentConstraint(node: TypeNode): Type | undefined;
@@ -2736,14 +2739,6 @@ declare namespace ts {
          * Others are added in computeSuggestionDiagnostics.
          */
         getSuggestionDiagnostics(file: SourceFile, cancellationToken?: CancellationToken): ReadonlyArray<DiagnosticWithLocation>;
-        /**
-         * For a union, will include a property if it's defined in *any* of the member types.
-         * So for `{ a } | { b }`, this will include both `a` and `b`.
-         * Does not include properties of primitive types.
-         */
-        isArrayLikeType(type: Type): boolean;
-        isArrayType(type: Type): boolean;
-        isTypeAny(type: Type | undefined): boolean | undefined;
         /**
          * Depending on the operation performed, it may be appropriate to throw away the checker
          * if the cancellation token is triggered. Typically, if it is used for error checking
