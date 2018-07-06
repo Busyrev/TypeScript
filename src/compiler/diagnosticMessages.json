@@ -971,7 +971,7 @@
         "category": "Error",
         "code": 1339
     },
-    "Module '{0}' does not refer to a type, but is used as a type here.": {
+    "Module '{0}' does not refer to a type, but is used as a type here. Did you mean 'typeof import('{0}')'?": {
         "category": "Error",
         "code": 1340
     },
@@ -1252,7 +1252,7 @@
         "category": "Error",
         "code": 2366
     },
-    "The types of these values indicate that this condition will always be '{0}'.": {
+    "This condition will always return '{0}' since the types '{1}' and '{2}' have no overlap.": {
         "category": "Error",
         "code": 2367
     },
@@ -1451,6 +1451,10 @@
     "Class static side '{0}' incorrectly extends base class static side '{1}'.": {
         "category": "Error",
         "code": 2417
+    },
+    "Type of computed property's value is '{0}', which is not assignable to type '{1}'.": {
+        "category": "Error",
+        "code": 2418
     },
     "Class '{0}' incorrectly implements interface '{1}'.": {
         "category": "Error",
@@ -2396,6 +2400,14 @@
     "Cannot find lib definition for '{0}'. Did you mean '{1}'?": {
         "category": "Error",
         "code": 2727
+    },
+    "'{0}' was declared here.": {
+        "category": "Error",
+        "code": 2728
+    },
+    "Property '{0}' is used before its initialization.": {
+        "category": "Error",
+        "code": 2729
     },
 
     "Import declaration '{0}' is using private name '{1}'.": {
@@ -3603,6 +3615,22 @@
         "code": 6199,
         "reportsUnnecessary": true
     },
+    "Definitions of the following identifiers conflict with those in another file: {0}": {
+        "category": "Error",
+        "code": 6200
+    },
+    "Conflicts are in this file.": {
+        "category": "Message",
+        "code": 6201
+    },
+    "'{0}' was also declared here.": {
+        "category": "Message",
+        "code": 6203
+    },
+    "and here.": {
+        "category": "Message",
+        "code": 6204
+    },
 
     "Projects to reference": {
         "category": "Message",
@@ -3728,6 +3756,15 @@
     "Skipping clean because not all projects could be located": {
         "category": "Error",
         "code": 6371
+    },
+
+    "The expected type comes from property '{0}' which is declared here on type '{1}'": {
+        "category": "Message",
+        "code": 6500
+    },
+    "The expected type comes from this index signature.": {
+        "category": "Message",
+        "code": 6501
     },
 
     "Variable '{0}' implicitly has an '{1}' type.": {
@@ -4446,5 +4483,13 @@
     "Convert named export to default export": {
         "category": "Message",
         "code": 95062
+    },
+    "Add missing enum member '{0}'": {
+        "category": "Message",
+        "code": 95063
+    },
+    "Add all missing imports": {
+        "category": "Message",
+        "code": 95064
     }
 }
