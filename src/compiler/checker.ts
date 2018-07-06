@@ -8163,7 +8163,9 @@ namespace ts {
             }
             const type = getDeclaredTypeOfSymbol(symbol);
             if (!(type.flags & TypeFlags.Object)) {
-                error(getTypeDeclaration(symbol), Diagnostics.Global_type_0_must_be_a_class_or_interface_type, symbolName(symbol));
+                // ignoring this error here works
+                // see 5683b2f0-0571-4f96-ade1-1ac5bb814ba5
+                // error(getTypeDeclaration(symbol), Diagnostics.Global_type_0_must_be_a_class_or_interface_type, symbolName(symbol));
                 return arity ? emptyGenericType : emptyObjectType;
             }
             if (length((<InterfaceType>type).typeParameters) !== arity) {
