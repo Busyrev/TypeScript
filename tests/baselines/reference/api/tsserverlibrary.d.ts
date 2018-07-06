@@ -2717,7 +2717,6 @@ declare namespace ts {
          * So for `{ a } | { b }`, this will include both `a` and `b`.
          * Does not include properties of primitive types.
          */
-        isArrayLikeType(type: Type): boolean;
         getAllPossiblePropertiesOfTypes(type: ReadonlyArray<Type>): Symbol[];
         resolveName(name: string, location: Node, meaning: SymbolFlags, excludeGlobals: boolean): Symbol | undefined;
         getJsxNamespace(location?: Node): string;
