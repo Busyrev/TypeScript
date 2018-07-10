@@ -1520,7 +1520,6 @@ namespace ts {
         function shouldReportDiagnostic(diagnostic: Diagnostic) {
             if (diagnostic.code === 17009) return false; // super_must_be_called_before_accessing_this_in_the_constructor_of_a_derived_class
             if (diagnostic.code === 2376) return false; // A_super_call_must_be_the_first_statement_in_the_constructor_when_a_class_contains_initialized_properties_or_has_parameter_properties
-            if (diagnostic.code === 2316) return false; // Global_type_0_must_be_a_class_or_interface_type, but this ignore is not working // see 5683b2f0-0571-4f96-ade1-1ac5bb814ba5
             const { file, start } = diagnostic;
             if (file) {
                 const lineStarts = getLineStarts(file);
