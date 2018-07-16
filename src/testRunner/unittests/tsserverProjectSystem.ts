@@ -4983,7 +4983,7 @@ namespace ts.projectSystem {
                 content: `
                 // @ts-check
                 let x = 1;
-                x === "string";`
+                x = "string";`
             };
 
             const host = createServerHost([jsFile]);
@@ -4996,7 +4996,7 @@ namespace ts.projectSystem {
             );
             const errorResult = <protocol.Diagnostic[]>session.executeCommand(getErrRequest).response;
             assert.isTrue(errorResult.length === 1);
-            assert.equal(errorResult[0].code, Diagnostics.This_condition_will_always_return_0_since_the_types_1_and_2_have_no_overlap.code);
+            assert.equal(errorResult[0].code, Diagnostics.Type_0_is_not_assignable_to_type_1.code);
         });
 
         it("should report semantic errors for configured js project with '// @ts-check' and skipLibCheck=true", () => {
@@ -5010,7 +5010,7 @@ namespace ts.projectSystem {
                 content: `
                 // @ts-check
                 let x = 1;
-                x === "string";`
+                x = "string";`
             };
 
             const host = createServerHost([jsconfigFile, jsFile]);
@@ -5023,7 +5023,7 @@ namespace ts.projectSystem {
             );
             const errorResult = <protocol.Diagnostic[]>session.executeCommand(getErrRequest).response;
             assert.isTrue(errorResult.length === 1);
-            assert.equal(errorResult[0].code, Diagnostics.This_condition_will_always_return_0_since_the_types_1_and_2_have_no_overlap.code);
+            assert.equal(errorResult[0].code, Diagnostics.Type_0_is_not_assignable_to_type_1.code);
         });
 
         it("should report semantic errors for configured js project with checkJs=true and skipLibCheck=true", () => {
@@ -5039,7 +5039,7 @@ namespace ts.projectSystem {
             const jsFile = {
                 path: "/a/jsFile.js",
                 content: `let x = 1;
-                x === "string";`
+                x = "string";`
             };
 
             const host = createServerHost([jsconfigFile, jsFile]);
@@ -5052,7 +5052,7 @@ namespace ts.projectSystem {
             );
             const errorResult = <protocol.Diagnostic[]>session.executeCommand(getErrRequest).response;
             assert.isTrue(errorResult.length === 1);
-            assert.equal(errorResult[0].code, Diagnostics.This_condition_will_always_return_0_since_the_types_1_and_2_have_no_overlap.code);
+            assert.equal(errorResult[0].code, Diagnostics.Type_0_is_not_assignable_to_type_1.code);
         });
     });
 

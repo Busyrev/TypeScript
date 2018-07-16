@@ -1519,8 +1519,9 @@ namespace ts {
          * Skip errors if previous line start with '// @ts-ignore' comment, not counting non-empty non-comment lines
          */
         function shouldReportDiagnostic(diagnostic: Diagnostic) {
-            if (diagnostic.code === 17009) return false; // super_must_be_called_before_accessing_this_in_the_constructor_of_a_derived_class
-            if (diagnostic.code === 2376) return false; // A_super_call_must_be_the_first_statement_in_the_constructor_when_a_class_contains_initialized_properties_or_has_parameter_properties
+            if (diagnostic.code === Diagnostics.super_must_be_called_before_accessing_this_in_the_constructor_of_a_derived_class.code) return false;
+            if (diagnostic.code === Diagnostics.A_super_call_must_be_the_first_statement_in_the_constructor_when_a_class_contains_initialized_properties_or_has_parameter_properties.code) return false;
+            if (diagnostic.code === Diagnostics.This_condition_will_always_return_0_since_the_types_1_and_2_have_no_overlap.code) return false; // see https://github.com/Microsoft/TypeScript/issues/25642
             const { file, start } = diagnostic;
             if (file) {
                 const lineStarts = getLineStarts(file);
