@@ -8486,7 +8486,7 @@ new C();`
             });
         });
 
-        it("when watching directories for failed lookup locations in amd resolution", () => {
+        describe("when watching directories for failed lookup locations in amd resolution", () => {
             const projectRoot = "/user/username/projects/project";
             const nodeFile: File = {
                 path: `${projectRoot}/src/typings/node.d.ts`,
@@ -8530,19 +8530,35 @@ export const x = 10;`
                     }
                 })
             };
-            const files = [nodeFile, electronFile, srcFile, moduleFile, configFile, libFile];
-            const host = createServerHost(files);
-            const service = createProjectService(host);
-            service.openClientFile(srcFile.path, srcFile.content, ScriptKind.TS, projectRoot);
-            checkProjectActualFiles(service.configuredProjects.get(configFile.path)!, files.map(f => f.path));
-            checkWatchedFilesDetailed(host, mapDefined(files, f => f === srcFile ? undefined : f.path), 1);
-            checkWatchedDirectoriesDetailed(host, [`${projectRoot}`], 1,  /*recursive*/ false); // failed lookup for fs
-            const expectedWatchedDirectories = createMap<number>();
-            expectedWatchedDirectories.set(`${projectRoot}/src`, 2); // Wild card and failed lookup
-            expectedWatchedDirectories.set(`${projectRoot}/somefolder`, 1); // failed lookup for somefolder/module2
-            expectedWatchedDirectories.set(`${projectRoot}/node_modules`, 1); // failed lookup for with node_modules/@types/fs
-            expectedWatchedDirectories.set(`${projectRoot}/src/typings`, 1); // typeroot directory
-            checkWatchedDirectoriesDetailed(host, expectedWatchedDirectories, /*recursive*/ true);
+
+            function verifyModuleResolution(useNodeFile: boolean) {
+                const files = [...(useNodeFile ? [nodeFile] : []), electronFile, srcFile, moduleFile, configFile, libFile];
+                const host = createServerHost(files);
+                const service = createProjectService(host);
+                service.openClientFile(srcFile.path, srcFile.content, ScriptKind.TS, projectRoot);
+                checkProjectActualFiles(service.configuredProjects.get(configFile.path)!, files.map(f => f.path));
+                checkWatchedFilesDetailed(host, mapDefined(files, f => f === srcFile ? undefined : f.path), 1);
+                if (useNodeFile) {
+                    checkWatchedDirectories(host, emptyArray,  /*recursive*/ false); // since fs resolves to ambient module, shouldnt watch failed lookup
+                }
+                else {
+                    checkWatchedDirectoriesDetailed(host, [`${projectRoot}`], 1,  /*recursive*/ false); // failed lookup for fs
+                }
+                const expectedWatchedDirectories = createMap<number>();
+                expectedWatchedDirectories.set(`${projectRoot}/src`, 2); // Wild card and failed lookup
+                expectedWatchedDirectories.set(`${projectRoot}/somefolder`, 1); // failed lookup for somefolder/module2
+                expectedWatchedDirectories.set(`${projectRoot}/node_modules`, 1); // failed lookup for with node_modules/@types/fs
+                expectedWatchedDirectories.set(`${projectRoot}/src/typings`, 1); // typeroot directory
+                checkWatchedDirectoriesDetailed(host, expectedWatchedDirectories, /*recursive*/ true);
+            }
+
+            it("when resolves to ambient module", () => {
+                verifyModuleResolution(/*useNodeFile*/ true);
+            });
+
+            it("when resolution fails", () => {
+                verifyModuleResolution(/*useNodeFile*/ false);
+            });
         });
     });
 
@@ -8573,10 +8589,10 @@ export const x = 10;`
                 tscWatchDirectory === Tsc_WatchDirectory.WatchFile ?
                     expectedWatchedFiles :
                     createMap();
-            // For failed resolution lookup and tsconfig files
-            mapOfDirectories.set(projectFolder, 2);
+            // For failed resolution lookup and tsconfig files => cached so only watched only once
+            mapOfDirectories.set(projectFolder, 1);
             // Through above recursive watches
-            mapOfDirectories.set(projectSrcFolder, 2);
+            mapOfDirectories.set(projectSrcFolder, 1);
             // node_modules/@types folder
             mapOfDirectories.set(`${projectFolder}/${nodeModulesAtTypes}`, 1);
             const expectedCompletions = ["file1"];
@@ -8672,7 +8688,7 @@ export const x = 10;`
             };
             const aTsconfig: File = {
                 path: "/a/tsconfig.json",
-                content: "{}",
+                content: JSON.stringify({ files: ["./old.ts", "./user.ts"] }),
             };
             const bUserTs: File = {
                 path: "/b/user.ts",
@@ -8687,12 +8703,15 @@ export const x = 10;`
             const session = createSession(host);
             openFilesForSession([aUserTs, bUserTs], session);
 
-            const renameRequest = makeSessionRequest<protocol.GetEditsForFileRenameRequestArgs>(CommandNames.GetEditsForFileRename, {
-                oldFilePath: "/a/old.ts",
+            const response = executeSessionRequest<protocol.GetEditsForFileRenameRequest, protocol.GetEditsForFileRenameResponse>(session, CommandNames.GetEditsForFileRename, {
+                oldFilePath: aOldTs.path,
                 newFilePath: "/a/new.ts",
             });
-            const response = session.executeCommand(renameRequest).response as protocol.GetEditsForFileRenameResponse["body"];
-            assert.deepEqual(response, [
+            assert.deepEqual<ReadonlyArray<protocol.FileCodeEdits>>(response, [
+                {
+                    fileName: aTsconfig.path,
+                    textChanges: [{ ...protocolTextSpanFromSubstring(aTsconfig.content, "./old.ts"), newText: "new.ts" }],
+                },
                 {
                     fileName: aUserTs.path,
                     textChanges: [{ ...protocolTextSpanFromSubstring(aUserTs.content, "./old"), newText: "./new" }],
@@ -8700,6 +8719,31 @@ export const x = 10;`
                 {
                     fileName: bUserTs.path,
                     textChanges: [{ ...protocolTextSpanFromSubstring(bUserTs.content, "../a/old"), newText: "../a/new" }],
+                },
+            ]);
+        });
+
+        it("works with file moved to inferred project", () => {
+            const aTs: File = { path: "/a.ts", content: 'import {} from "./b";' };
+            const cTs: File = { path: "/c.ts", content: "export {};" };
+            const tsconfig: File = { path: "/tsconfig.json", content: JSON.stringify({ files: ["./a.ts", "./b.ts"] }) };
+
+            const host = createServerHost([aTs, cTs, tsconfig]);
+            const session = createSession(host);
+            openFilesForSession([aTs, cTs], session);
+
+            const response = executeSessionRequest<protocol.GetEditsForFileRenameRequest, protocol.GetEditsForFileRenameResponse>(session, CommandNames.GetEditsForFileRename, {
+                oldFilePath: "/b.ts",
+                newFilePath: cTs.path,
+            });
+            assert.deepEqual<ReadonlyArray<protocol.FileCodeEdits>>(response, [
+                {
+                    fileName: "/tsconfig.json",
+                    textChanges: [{ ...protocolTextSpanFromSubstring(tsconfig.content, "./b.ts"), newText: "c.ts" }],
+                },
+                {
+                    fileName: "/a.ts",
+                    textChanges: [{ ...protocolTextSpanFromSubstring(aTs.content, "./b"), newText: "./c" }],
                 },
             ]);
         });
@@ -9193,6 +9237,22 @@ export function Test2() {
                 ],
             });
 
+        });
+
+        it("getEditsForFileRename", () => {
+            const { session, aTs, userTs } = makeSampleProjects();
+            const response = executeSessionRequest<protocol.GetEditsForFileRenameRequest, protocol.GetEditsForFileRenameResponse>(session, protocol.CommandTypes.GetEditsForFileRename, {
+                oldFilePath: aTs.path,
+                newFilePath: "/a/aNew.ts",
+            });
+            assert.deepEqual<ReadonlyArray<protocol.FileCodeEdits>>(response, [
+                {
+                    fileName: userTs.path,
+                    textChanges: [
+                        { ...protocolTextSpanFromSubstring(userTs.content, "../a/bin/a"), newText: "../a/bin/aNew" },
+                    ],
+                },
+            ]);
         });
     });
 

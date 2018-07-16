@@ -286,6 +286,16 @@ namespace ts.server {
             : deduplicate(outputs, areEqual);
     }
 
+    function combineProjectOutputFromEveryProject<T>(projectService: ProjectService, action: (project: Project) => ReadonlyArray<T>, areEqual: (a: T, b: T) => boolean) {
+        const outputs: T[] = [];
+        projectService.forEachProject(project => {
+            if (project.isOrphan() || !project.languageServiceEnabled) return;
+            const theseOutputs = action(project);
+            outputs.push(...theseOutputs.filter(output => !outputs.some(o => areEqual(o, output))));
+        });
+        return outputs;
+    }
+
     function combineProjectOutputWhileOpeningReferencedProjects<T>(
         projects: Projects,
         projectService: ProjectService,
@@ -1749,19 +1759,11 @@ namespace ts.server {
             const newPath = toNormalizedPath(args.newFilePath);
             const formatOptions = this.getHostFormatOptions();
             const preferences = this.getHostPreferences();
-
-            const changes: (protocol.FileCodeEdits | FileTextChanges)[] = [];
-            this.projectService.forEachProject(project => {
-                if (project.isOrphan() || !project.languageServiceEnabled) return;
-                for (const fileTextChanges of project.getLanguageService().getEditsForFileRename(oldPath, newPath, formatOptions, preferences)) {
-                    // Subsequent projects may make conflicting edits to the same file -- just go with the first.
-                    if (!changes.some(f => f.fileName === fileTextChanges.fileName)) {
-                        changes.push(simplifiedResult ? this.mapTextChangeToCodeEdit(project, fileTextChanges) : fileTextChanges);
-                    }
-                }
-            });
-
-            return changes as ReadonlyArray<protocol.FileCodeEdits> | ReadonlyArray<FileTextChanges>;
+            const changes = combineProjectOutputFromEveryProject(
+                this.projectService,
+                project => project.getLanguageService().getEditsForFileRename(oldPath, newPath, formatOptions, preferences),
+                (a, b) => a.fileName === b.fileName);
+            return simplifiedResult ? changes.map(c => this.mapTextChangeToCodeEditUsingScriptInfoOrConfigFile(c)) : changes;
         }
 
         private getCodeFixes(args: protocol.CodeFixRequestArgs, simplifiedResult: boolean): ReadonlyArray<protocol.CodeFixAction> | ReadonlyArray<CodeFixAction> | undefined {
@@ -1835,8 +1837,15 @@ namespace ts.server {
         }
 
         private mapTextChangeToCodeEdit(project: Project, change: FileTextChanges): protocol.FileCodeEdits {
-            const path = normalizedPathToPath(toNormalizedPath(change.fileName), this.host.getCurrentDirectory(), fileName => this.getCanonicalFileName(fileName));
-            return mapTextChangesToCodeEdits(change, project.getSourceFileOrConfigFile(path));
+            return mapTextChangesToCodeEditsForFile(change, project.getSourceFileOrConfigFile(this.normalizePath(change.fileName)));
+        }
+
+        private mapTextChangeToCodeEditUsingScriptInfoOrConfigFile(change: FileTextChanges): protocol.FileCodeEdits {
+            return mapTextChangesToCodeEditsUsingScriptInfoOrConfig(change, this.projectService.getScriptInfoOrConfig(this.normalizePath(change.fileName)));
+        }
+
+        private normalizePath(fileName: string) {
+           return normalizedPathToPath(toNormalizedPath(fileName), this.host.getCurrentDirectory(), fileName => this.getCanonicalFileName(fileName));
         }
 
         private convertTextChangeToCodeEdit(change: TextChange, scriptInfo: ScriptInfo): protocol.CodeEdit {
@@ -2348,8 +2357,8 @@ namespace ts.server {
         return { file: fileName, start: scriptInfo.positionToLineOffset(textSpan.start), end: scriptInfo.positionToLineOffset(textSpanEnd(textSpan)) };
     }
 
-    function mapTextChangesToCodeEdits(textChanges: FileTextChanges, sourceFile: SourceFile | undefined): protocol.FileCodeEdits {
-        Debug.assert(!!textChanges.isNewFile === !sourceFile);
+    function mapTextChangesToCodeEditsForFile(textChanges: FileTextChanges, sourceFile: SourceFile | undefined): protocol.FileCodeEdits {
+        Debug.assert(!!textChanges.isNewFile === !sourceFile, "Expected isNewFile for (only) new files", () => JSON.stringify({ isNewFile: !!textChanges.isNewFile, hasSourceFile: !!sourceFile }));
         if (sourceFile) {
             return {
                 fileName: textChanges.fileName,
@@ -2361,12 +2370,31 @@ namespace ts.server {
         }
     }
 
+    function mapTextChangesToCodeEditsUsingScriptInfoOrConfig(textChanges: FileTextChanges, scriptInfo: ScriptInfoOrConfig | undefined): protocol.FileCodeEdits {
+        Debug.assert(!!textChanges.isNewFile === !scriptInfo, "Expected isNewFile for (only) new files", () => JSON.stringify({ isNewFile: !!textChanges.isNewFile, hasScriptInfo: !!scriptInfo }));
+        return scriptInfo
+            ? { fileName: textChanges.fileName, textChanges: textChanges.textChanges.map(textChange => convertTextChangeToCodeEditUsingScriptInfoOrConfig(textChange, scriptInfo)) }
+            : convertNewFileTextChangeToCodeEdit(textChanges);
+    }
+
     function convertTextChangeToCodeEdit(change: TextChange, sourceFile: SourceFile): protocol.CodeEdit {
         return {
             start: convertToLocation(sourceFile.getLineAndCharacterOfPosition(change.span.start)),
             end: convertToLocation(sourceFile.getLineAndCharacterOfPosition(change.span.start + change.span.length)),
             newText: change.newText ? change.newText : "",
         };
+    }
+
+    function convertTextChangeToCodeEditUsingScriptInfoOrConfig(change: TextChange, scriptInfo: ScriptInfoOrConfig): protocol.CodeEdit {
+        return { start: positionToLineOffset(scriptInfo, change.span.start), end: positionToLineOffset(scriptInfo, textSpanEnd(change.span)), newText: change.newText };
+    }
+
+    function positionToLineOffset(info: ScriptInfoOrConfig, position: number): protocol.Location {
+        return isConfigFile(info) ? locationFromLineAndCharacter(info.getLineAndCharacterOfPosition(position)) : info.positionToLineOffset(position);
+    }
+
+    function locationFromLineAndCharacter(lc: LineAndCharacter): protocol.Location {
+        return { line: lc.line + 1, offset: lc.character + 1 };
     }
 
     function convertNewFileTextChangeToCodeEdit(textChanges: FileTextChanges): protocol.FileCodeEdits {

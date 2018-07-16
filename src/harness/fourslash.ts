@@ -3369,7 +3369,7 @@ Actual: ${stringify(fullActual)}`);
 
             this.languageServiceAdapterHost.renameFileOrDirectory(oldPath, newPath);
             this.languageService.cleanupSemanticCache();
-            const pathUpdater = ts.getPathUpdater(oldPath, newPath, ts.createGetCanonicalFileName(/*useCaseSensitiveFileNames*/ false));
+            const pathUpdater = ts.getPathUpdater(oldPath, newPath, ts.createGetCanonicalFileName(/*useCaseSensitiveFileNames*/ false), /*sourceMapper*/ undefined);
             test(renameKeys(newFileContents, key => pathUpdater(key) || key), "with file moved");
         }
 
@@ -4767,7 +4767,7 @@ namespace FourSlashInterface {
     }
 
     export interface VerifyCompletionsOptions {
-        readonly marker?: ArrayOrSingle<string>;
+        readonly marker?: ArrayOrSingle<string | FourSlash.Marker>;
         readonly isNewIdentifierLocation?: boolean;
         readonly exact?: ArrayOrSingle<ExpectedCompletionEntry>;
         readonly includes?: ArrayOrSingle<ExpectedCompletionEntry>;
